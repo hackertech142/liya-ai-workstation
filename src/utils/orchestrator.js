@@ -140,7 +140,7 @@ export const planAndExecute = async (query, onChunk, options = {}) => {
             top_p: 0.9,
             repeat_penalty: 1.1,
             num_predict: 2048,
-            stop: ["<|begin_of_sentence|>", "<|end_of_sentence|>", "<｜begin▁of▁sentence｜>", "User:", "Assistant:", "[SYSTEM"]
+            stop: ["<|end_of_sentence|>", "User:", "Assistant:", "[SYSTEM"]
           }
         });
 
