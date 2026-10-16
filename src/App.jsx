@@ -602,6 +602,12 @@ function App() {
       if (command === 'purge memory') {
         handleClearHistory(); // Clears logs
         clearBlackboard(); // Clears blackboard
+        try {
+          await memoryManager.clearAll();
+          console.log('[SystemPurge] Mem0 memory history cleared successfully.');
+        } catch (memErr) {
+          console.warn('[SystemPurge] Failed to clear Mem0 memory:', memErr);
+        }
         fetch(`${BACKEND_URL}/api/system/purge`, { method: 'POST' })
           .then(() => clearAllSessions())
           .then(() => {

@@ -906,7 +906,7 @@ app.post('/api/faceswap', async (req, res) => {
 
         console.log(`[FaceSwap] Running command: ${cmd}`);
 
-        exec(cmd, async (error, stdout, stderr) => {
+        exec(cmd, { maxBuffer: 100 * 1024 * 1024 }, async (error, stdout, stderr) => {
             // Clean up temp files in background
             if (isTempSource) fs.remove(sourcePath).catch(() => { });
             if (isTempTarget) fs.remove(targetPath).catch(() => { });
@@ -1066,7 +1066,7 @@ app.post('/api/faceswap/multi', async (req, res) => {
 
         console.log(`[FaceSwap Multi] Running command: ${cmd}`);
 
-        exec(cmd, async (error, stdout, stderr) => {
+        exec(cmd, { maxBuffer: 100 * 1024 * 1024 }, async (error, stdout, stderr) => {
             if (isTempTarget) fs.remove(targetPath).catch(() => { });
             fs.remove(mappingsFilePath).catch(() => { });
             for (const sPath of tempSourcePaths) {
@@ -1283,7 +1283,7 @@ app.post('/api/faceswap/video/multi', async (req, res) => {
 
         console.log(`[FaceSwap Video Multi] Running command: ${cmd}`);
 
-        exec(cmd, async (error, stdout, stderr) => {
+        exec(cmd, { maxBuffer: 100 * 1024 * 1024 }, async (error, stdout, stderr) => {
             if (isTempVideo) fs.remove(videoPath).catch(() => { });
             fs.remove(mappingsFilePath).catch(() => { });
             for (const sPath of tempSourcePaths) {

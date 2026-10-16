@@ -6,10 +6,10 @@ echo               LIYA AI ASSISTANT LAUNCHER
 echo ========================================================
 echo.
 echo [1/3] Starting LIYA Backend Server...
-start "LIYA Backend Server" /min cmd /k "cd /d c:\liya\backend && npm run dev"
+start "LIYA Backend Server" /min cmd /k "cd /d "%~dp0backend" && npm run dev"
 
 echo [2/3] Starting LIYA Frontend Server...
-start "LIYA Frontend Server" /min cmd /k "cd /d c:\liya && npm run dev"
+start "LIYA Frontend Server" /min cmd /k "cd /d "%~dp0" && npm run dev"
 
 echo [3/3] Waiting for servers to initialize...
 timeout /t 4 /nobreak >nul

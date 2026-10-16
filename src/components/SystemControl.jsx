@@ -374,7 +374,7 @@ const SystemControl = ({
                                         </div>
                                         <button 
                                             onClick={() => {
-                                                if(confirm("PROTOCOL DELTA: Clear all chat memory AND wipe blackboard?")) {
+                                                if(confirm("PROTOCOL DELTA: Clear all chat sessions, Blackboard, AND wipe Mem0 memory history?")) {
                                                     if (onManualAction) onManualAction('[INTERNAL] purge memory');
                                                 }
                                             }}
