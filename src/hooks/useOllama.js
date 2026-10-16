@@ -167,7 +167,8 @@ export function useOllama() {
 
         const last = finalMessages[finalMessages.length - 1];
         if (last && last.role === 'user') {
-            const isTrivial = last.content.length < 15;
+            const trivialSmallTalkPatterns = /^(ok|okay|thanks|thank you|hi|hello|hey|hii|hlo|hii|hola|howdy|sup|hiii|sure|got it|nice|good|great|cool|fine|yes|no|yep|nope|hmm|lol|haha|wow|understood|noted|👍|🙏|✅|👋)[.!?\s]*$/i;
+            const isTrivial = last.content.length < 15 && trivialSmallTalkPatterns.test(last.content.toLowerCase().trim());
             const contextParts = [
                 visionContext,
                 memoryContext,

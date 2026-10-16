@@ -58,10 +58,10 @@ const Message = ({ role, content, images, fileName, onSpeaking, isPicoMode }) =>
                 processedContent = processedContent.trim().replace(/^\[AUTOMATED ACTION.*?\]:\s*/, '🤖 **Liya Automation initiated:** ');
             }
 
-            // Clean visual HTML blocks for rendering only
+            // Prepend Canvas indicator while preserving the code block for viewing/copying
             processedContent = processedContent.replace(
-                /```(?:html|xml)?\s*[\s\S]*?(?:<!DOCTYPE html|<html|<svg)[\s\S]*?(?:```|<\/html>|<\/svg>|$)/gi,
-                `\n\n🖥️ **[Canvas Interactive Visual Loaded]**\n*Maine side panel (Canvas) par is visual render ko load kar diya hai.*`
+                /(```(?:html|xml)?\s*[\s\S]*?(?:<!DOCTYPE html|<html|<svg)[\s\S]*?(?:```|<\/html>|<\/svg>|$))/gi,
+                `\n\n🖥️ **[Canvas Interactive Visual Loaded]**\n*Maine side panel (Canvas) par is visual render ko load kar diya hai.*\n\n$1`
             );
         } catch (err) {}
 
