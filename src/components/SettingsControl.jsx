@@ -33,13 +33,40 @@ const SettingsControl = () => {
         });
         setApiKeys(initialKeys);
 
-        // Load Models
-        setModels({
-            OLLAMA_FAST_MODEL: localStorage.getItem('OLLAMA_FAST_MODEL') || 'gpt-oss:20b-cloud',
-            OLLAMA_SMART_MODEL: localStorage.getItem('OLLAMA_SMART_MODEL') || 'gpt-oss:120b-cloud',
-            CODER_MODEL: localStorage.getItem('CODER_MODEL') || 'gpt-oss:120b-cloud',
-            OLLAMA_VISION_MODEL: localStorage.getItem('OLLAMA_VISION_MODEL') || 'minimax-m3'
-        });
+        // Load Models dynamically from backend settings or localStorage
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+        fetch(`${backendUrl}/api/settings`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data && data.settings) {
+                    const s = data.settings;
+                    setModels({
+                        OLLAMA_FAST_MODEL: s.OLLAMA_FAST_MODEL || localStorage.getItem('OLLAMA_FAST_MODEL') || 'gpt-oss:20b',
+                        OLLAMA_SMART_MODEL: s.OLLAMA_SMART_MODEL || localStorage.getItem('OLLAMA_SMART_MODEL') || 'gpt-oss:120b',
+                        CODER_MODEL: s.CODER_MODEL || localStorage.getItem('CODER_MODEL') || 'gpt-oss:120b',
+                        OLLAMA_VISION_MODEL: s.OLLAMA_VISION_MODEL || localStorage.getItem('OLLAMA_VISION_MODEL') || 'gemma4:31b'
+                    });
+                    if (s.OLLAMA_FAST_MODEL) localStorage.setItem('OLLAMA_FAST_MODEL', s.OLLAMA_FAST_MODEL);
+                    if (s.OLLAMA_SMART_MODEL) localStorage.setItem('OLLAMA_SMART_MODEL', s.OLLAMA_SMART_MODEL);
+                    if (s.CODER_MODEL) localStorage.setItem('CODER_MODEL', s.CODER_MODEL);
+                    if (s.OLLAMA_VISION_MODEL) localStorage.setItem('OLLAMA_VISION_MODEL', s.OLLAMA_VISION_MODEL);
+                } else {
+                    setModels({
+                        OLLAMA_FAST_MODEL: localStorage.getItem('OLLAMA_FAST_MODEL') || 'gpt-oss:20b',
+                        OLLAMA_SMART_MODEL: localStorage.getItem('OLLAMA_SMART_MODEL') || 'gpt-oss:120b',
+                        CODER_MODEL: localStorage.getItem('CODER_MODEL') || 'gpt-oss:120b',
+                        OLLAMA_VISION_MODEL: localStorage.getItem('OLLAMA_VISION_MODEL') || 'gemma4:31b'
+                    });
+                }
+            })
+            .catch(() => {
+                setModels({
+                    OLLAMA_FAST_MODEL: localStorage.getItem('OLLAMA_FAST_MODEL') || 'gpt-oss:20b',
+                    OLLAMA_SMART_MODEL: localStorage.getItem('OLLAMA_SMART_MODEL') || 'gpt-oss:120b',
+                    CODER_MODEL: localStorage.getItem('CODER_MODEL') || 'gpt-oss:120b',
+                    OLLAMA_VISION_MODEL: localStorage.getItem('OLLAMA_VISION_MODEL') || 'gemma4:31b'
+                });
+            });
     }, []);
 
     const handleSave = () => {
@@ -55,6 +82,20 @@ const SettingsControl = () => {
         localStorage.setItem('OLLAMA_SMART_MODEL', models.OLLAMA_SMART_MODEL);
         localStorage.setItem('CODER_MODEL', models.CODER_MODEL);
         localStorage.setItem('OLLAMA_VISION_MODEL', models.OLLAMA_VISION_MODEL);
+
+        // Sync Models with Backend dynamically
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+        fetch(`${backendUrl}/api/settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                OLLAMA_FAST_MODEL: models.OLLAMA_FAST_MODEL,
+                OLLAMA_SMART_MODEL: models.OLLAMA_SMART_MODEL,
+                CODER_MODEL: models.CODER_MODEL,
+                OLLAMA_VISION_MODEL: models.OLLAMA_VISION_MODEL,
+                userName
+            })
+        }).catch(err => console.warn("Failed to sync settings with backend:", err));
 
         // Refresh state
         const refreshedKeys = {};
@@ -184,7 +225,7 @@ const SettingsControl = () => {
                                 value={models.CODER_MODEL}
                                 onChange={(e) => setModels(prev => ({ ...prev, CODER_MODEL: e.target.value }))}
                                 className="w-full bg-transparent border-none text-xs text-slate-800 font-mono outline-none"
-                                placeholder="qwen3-coder:480b-cloud"
+                                placeholder="gpt-oss:120b"
                             />
                         </div>
 
@@ -195,7 +236,7 @@ const SettingsControl = () => {
                                 value={models.OLLAMA_VISION_MODEL}
                                 onChange={(e) => setModels(prev => ({ ...prev, OLLAMA_VISION_MODEL: e.target.value }))}
                                 className="w-full bg-transparent border-none text-xs text-slate-800 font-mono outline-none"
-                                placeholder="minimax-m3"
+                                placeholder="gemma4:31b"
                             />
                         </div>
                     </div>

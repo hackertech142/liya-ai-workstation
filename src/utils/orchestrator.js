@@ -22,13 +22,13 @@ export const planAndExecute = async (query, onChunk, options = {}) => {
     const trivialPatterns = /^(ok|okay|thanks|thank you|hi|hello|hey|hii|hlo|hii|hola|howdy|sup|hiii|sure|got it|nice|good|great|cool|fine|yes|no|yep|nope|hmm|lol|haha|wow|understood|noted|👍|🙏|✅|👋)[.!?\s]*$/i;
     if (query.length < 2 || (query.length < 15 && trivialPatterns.test(userQuery))) {
       console.log('⚡ Trivial message detected. Skipping orchestrator.');
-      return { context: '', thought: '' };
+      return { context: '', thought: '', role: 'fast' };
     }
 
     // Check for early cancellation
     if (options.abortSignal?.aborted) {
       console.log("Orchestrator aborted before starting.");
-      return { context: '', thought: '', cancelled: true };
+      return { context: '', thought: '', cancelled: true, role: 'fast' };
     }
 
     const researchPattern = /r+e+s+e+a*r*c*h|deep dive|detailed report|tell me everything about|in[ -]depth|vistar se|poori detail|latest news|current status|recent events/i;
@@ -285,14 +285,29 @@ export const planAndExecute = async (query, onChunk, options = {}) => {
       } catch {
         // Final fallback: treat entire response as a direct thought (no tool usage)
         console.warn('⚠️ Orchestrator returned non-JSON response. Treating as direct thought.', rawContent.slice(0, 120));
+        let fallbackRole = 'smart';
+        const rawLower = rawContent.toLowerCase();
+        if (rawLower.includes('html') || rawLower.includes('web page') || rawLower.includes('website') || rawLower.includes('code') || rawLower.includes('script') || rawLower.includes('write_file')) {
+          fallbackRole = 'coder';
+        }
         return {
           context: '',
-          thought: rawContent.trim().substring(0, 500) || 'Model provided a direct answer without tool selection.'
+          thought: rawContent.trim().substring(0, 500) || 'Model provided a direct answer without tool selection.',
+          role: fallbackRole
         };
       }
     }
 
     console.log("📍 Orchestrator Plan:", plan);
+
+    // Compute intended role from AI reasoning or query context
+    let plannedRole = plan.role;
+    if (!plannedRole) {
+      const thoughtAndQuery = `${plan.thought || ''} ${query}`.toLowerCase();
+      if (thoughtAndQuery.includes('html') || thoughtAndQuery.includes('code') || thoughtAndQuery.includes('website') || thoughtAndQuery.includes('web page') || thoughtAndQuery.includes('page') || thoughtAndQuery.includes('app') || thoughtAndQuery.includes('canvas') || thoughtAndQuery.includes('script') || thoughtAndQuery.includes('program') || thoughtAndQuery.includes('demo')) {
+        plannedRole = 'coder';
+      }
+    }
 
     // 📍 ADVANCED: Multi-Agent Decomposition Guard
     // If user says "then" or "after", we should NOT spawn multiple parallel dependent agents.
@@ -341,7 +356,7 @@ export const planAndExecute = async (query, onChunk, options = {}) => {
           }];
           plan.isDirectFallback = true;
       } else {
-          return { context: "", thought: plan.thought };
+          return { context: "", thought: plan.thought, role: plannedRole || 'smart' };
       }
     }
 
@@ -432,12 +447,13 @@ export const planAndExecute = async (query, onChunk, options = {}) => {
     return {
       context: combinedContext,
       thought: plan.thought,
+      role: plannedRole || 'smart',
       directUI: directUIComponents.length > 0 ? directUIComponents.join('\n\n') : null,
       isDirectFallback: plan.isDirectFallback || false
     };
 
   } catch (e) {
     console.error("Orchestrator Error:", e);
-    return { context: "", error: e.message };
+    return { context: "", error: e.message, role: 'smart' };
   }
 };

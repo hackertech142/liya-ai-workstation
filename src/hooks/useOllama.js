@@ -53,10 +53,10 @@ export function useOllama() {
             }
         }
 
-        // --- NEW INTELLIGENT ORCHESTRATOR & MEMORY ---
         let orchestratedContext = "";
         let memoryContext = "";
         let backgroundTasksContext = "";
+        let plannedModelRole = null;
 
         if (options.backgroundTasks && options.backgroundTasks.length > 0) {
             const active = options.backgroundTasks.filter(t => t.status === 'running');
@@ -87,7 +87,8 @@ export function useOllama() {
                     })
                 ]);
 
-                const { context: toolContext, thought: planThought, directUI, isDirectFallback } = orchestratorOutput || {};
+                const { context: toolContext, thought: planThought, role: planRole, directUI, isDirectFallback } = orchestratorOutput || {};
+                if (planRole) plannedModelRole = planRole;
 
                 if (memResults) memoryContext = `[Relevant Memories]:\n${memResults}`;
                 if (toolContext) orchestratedContext = toolContext;
@@ -210,7 +211,8 @@ export function useOllama() {
         });
 
         // --- OPTIMIZATION: TOKEN GUARDIAN (Summarization) ---
-        const optimizedMessages = await optimizeContext(sanitizedMessages);
+        const isCoderTask = (plannedModelRole === 'coder') || (classifyPrompt(lastUserText) === 'coder');
+        const optimizedMessages = await optimizeContext(sanitizedMessages, isCoderTask ? { threshold: 32000 } : {});
 
         console.log("☁️ Sending to Cloud:", optimizedMessages);
 
@@ -237,8 +239,13 @@ export function useOllama() {
                 modelToUse = getModelForRole('vision');
                 tierClassification = 'vision';
             } else {
-                // 🔥 INTELLIGENT CLASSIFICATION: Analyze the query and route to the best model
-                tierClassification = classifyPrompt(lastUserText);
+                // 🔥 INTELLIGENT CLASSIFICATION: Prioritize orchestrator's planned role if available
+                if (plannedModelRole && ['coder', 'smart', 'fast', 'vision'].includes(plannedModelRole)) {
+                    console.log(`🎯 Orchestrator assigned role: ${plannedModelRole}`);
+                    tierClassification = plannedModelRole;
+                } else {
+                    tierClassification = classifyPrompt(lastUserText);
+                }
                 
                 // Detect follow-ups to canvas/name queries to keep using the coder model
                 const isFollowUpToCanvas = messages.length > 1 && 
@@ -286,6 +293,11 @@ export function useOllama() {
             const reasoningEffort = isOcrTask ? 'high' : (options.reasoningEffort || localStorage.getItem('REASONING_EFFORT') || 'medium');
             const finalReasoningEffort = tierClassification === 'smart' ? 'high' : (options.reasoningEffort || 'low');
 
+            // Coder tasks require massive generation window (32K) & deep context (64K) so large reasoning models (like beam) never run out of tokens
+            const customOptions = tierClassification === 'coder' 
+                ? { num_predict: 32768, num_ctx: 65536 } 
+                : {};
+
             await streamChat({
                 modelToUse,
                 messages: finalPayloadMessages,
@@ -294,7 +306,8 @@ export function useOllama() {
                 onThinking,
                 reasoningEffort: finalReasoningEffort,
                 cloudKey: effectiveKey,
-                host
+                host,
+                streamOptions: customOptions
             });
 
         } catch (err) {

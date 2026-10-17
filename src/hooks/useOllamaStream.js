@@ -24,7 +24,8 @@ export const useOllamaStream = () => {
         onThinking,
         reasoningEffort,
         cloudKey,
-        host
+        host,
+        streamOptions = {}
     }) => {
         setIsPlaying(true);
         setError(null);
@@ -137,7 +138,8 @@ export const useOllamaStream = () => {
                     top_k: 50,
                     top_p: 0.95,
                     repeat_penalty: 1.1,
-                    stop: ["</think>", "<|eot_id|>", "<|im_end|>", "<|end_of_sentence|>"]
+                    stop: ["<|eot_id|>", "<|im_end|>", "<|end_of_sentence|>"],
+                    ...streamOptions
                 },
                 // Pass the abort signal to cancel the request properly
                 abortSignal: abortControllerRef.current.signal
@@ -146,6 +148,7 @@ export const useOllamaStream = () => {
             console.log("Reading Stream...");
             let thinkingStopped = false;
             let insideThinkBlock = false;
+            let contentChunksSent = 0;
 
             for await (const part of stream) {
                 // FORCE BREAK IF ABORTED (Check either local signal or ref signal)
@@ -168,6 +171,7 @@ export const useOllamaStream = () => {
                     // Log raw message for diagnostics
                     if (part.message.content) {
                         console.log("Chunk Content:", part.message.content);
+                        if (part.message.content.trim()) contentChunksSent++;
                     }
 
                     if (part.message.content !== undefined && part.message.content !== null) {
@@ -204,9 +208,16 @@ export const useOllamaStream = () => {
 
                 if (part.done) {
                     console.log("Stream Done");
+                    if (insideThinkBlock) {
+                        onChunk('\n</think>\n\n');
+                        insideThinkBlock = false;
+                    }
                     if (chunksSent === 0 && !abortControllerRef.current?.signal.aborted) {
                         console.warn("⚠️ Model returned empty stream. Sending fallback.");
                         onChunk(`Arey Master, lagta hai koi technical issue ki wajah se response empty aa raha hai. AI ne research toh kar li thi, par reply nahi de paayi. Aap ek baar fir se puch sakte hain?`);
+                    } else if (contentChunksSent === 0 && !abortControllerRef.current?.signal.aborted) {
+                        console.warn("⚠️ Model only generated reasoning without final response text before stopping.");
+                        onChunk(`\n\n*(Model reasoning budget exhaust ho gaya. Coder Model ke liye Settings me **gpt-oss:120b** use karein.)*`);
                     }
                     if (!thinkingStopped && onThinking) {
                         onThinking(false);

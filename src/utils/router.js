@@ -31,10 +31,10 @@ runModelMigration();
 
 // === MODEL REGISTRY ===
 const MODEL_DEFAULTS = {
-    fast:         'gpt-oss:20b-cloud',
-    smart:        'gpt-oss:120b-cloud',
-    coder:        'gpt-oss:120b-cloud',
-    vision:       'minimax-m3',
+    fast:         'gpt-oss:20b',
+    smart:        'gpt-oss:120b',
+    coder:        'gpt-oss:120b',
+    vision:       'gemma4:31b',
 };
 
 // localStorage key mapping
@@ -55,7 +55,7 @@ export const classifyPrompt = (prompt) => {
     const text = prompt.toLowerCase().trim();
 
     // === TIER: CODER (Code generation, programming) ===
-    const codingPatterns = /\b(code|program|function|component|script|html|css|javascript|typescript|python|react|node|api|endpoint|algorithm|debug|fix.*bug|refactor|implement|write.*(?:code|function|class|component|app|website|page|script)|likh.*code|code.*likh|banao.*(?:app|website|page|component)|(?:app|website|page).*banao|error.*fix|fix.*error|syntax|compile|runtime|frontend|backend|fullstack|database|sql|mongodb|express|flask|django|nextjs|vite|canvas|convas|animation|visual|draw|skeleton|skelton|design|interactive|preview|graphics|3d|2d|render|svg|vibe|beats|theme|effect|modify|change)\b/i;
+    const codingPatterns = /\b(code|program|function|component|script|html|css|javascript|typescript|python|react|node|api|endpoint|algorithm|debug|fix.*bug|refactor|implement|write.*(?:code|function|class|component|app|website|page|script)|make.*(?:code|function|class|component|app|website|page|site|ui|script|demo)|build.*(?:code|function|class|component|app|website|page|site|ui|script|demo)|create.*(?:code|function|class|component|app|website|page|site|ui|script|demo)|likh.*code|code.*likh|banao.*(?:app|website|page|component)|(?:app|website|page).*banao|web\s*page|landing\s*page|website|error.*fix|fix.*error|syntax|compile|runtime|frontend|backend|fullstack|database|sql|mongodb|express|flask|django|nextjs|vite|canvas|convas|animation|visual|draw|skeleton|skelton|design|interactive|preview|graphics|3d|2d|render|svg|vibe|beats|theme|effect|modify|change)\b/i;
     if (codingPatterns.test(text)) return 'coder';
 
     // === TIER: SMART (Complex reasoning, analysis) ===

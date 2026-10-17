@@ -1,0 +1,11 @@
+# LIYA Python Requirements
+# 1. Face Swap & Vision
+opencv-python
+onnxruntime
+insightface
+numpy
+gdown
+
+# 2. Web Crawling & Deep Ingestion (Tier-1 Crawler)
+crawl4ai>=0.4.0
+playwright>=1.40.0

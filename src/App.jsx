@@ -297,6 +297,21 @@ function App() {
   useEffect(() => {
     warmup();
     initMCPTools();
+
+    // Sync settings from backend into localStorage on startup
+    fetch(`${BACKEND_URL}/api/settings`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && data.settings) {
+          const s = data.settings;
+          if (s.OLLAMA_FAST_MODEL) localStorage.setItem('OLLAMA_FAST_MODEL', s.OLLAMA_FAST_MODEL);
+          if (s.OLLAMA_SMART_MODEL) localStorage.setItem('OLLAMA_SMART_MODEL', s.OLLAMA_SMART_MODEL);
+          if (s.CODER_MODEL) localStorage.setItem('CODER_MODEL', s.CODER_MODEL);
+          if (s.OLLAMA_VISION_MODEL) localStorage.setItem('OLLAMA_VISION_MODEL', s.OLLAMA_VISION_MODEL);
+        }
+      })
+      .catch(() => {});
+
     // Theme Injection from LocalStorage
     const storedTheme = localStorage.getItem('APP_THEME');
     if (storedTheme) {

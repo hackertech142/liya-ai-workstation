@@ -1,23 +1,18 @@
 # Skill: Terminal_Nexus
 ## Description:
-Direct system access via sandboxed shell execution. This allows Liya to manipulate files, manage processes, and run scripts (Python/Bash/Node).
+Direct system access via sandboxed command execution and filesystem tools. This allows Liya to run scripts, manipulate files, and inspect system environments safely.
 
-## Capabilities:
-- **File Manipulation**: Creation, modification, and deletion of files/directories.
-- **System Diagnostics**: Checking CPU, memory, and disk usage.
-- **Environment Management**: Running local scripts and checking environment variables.
-
-## Protocol:
-To execute a command, Liya must call the `/api/terminal/run` endpoint with the following JSON payload:
-```json
-{
-  "command": "your_system_command",
-  "cwd": "optional_directory_path"
-}
-```
+## Tools to Use:
+1. **`run_command`**: Execute a shell command:
+   - `command`: The exact command string (e.g. `npm run build`, `python test.py`, `dir`)
+   - `cwd`: (Optional) Working directory path
+2. **`read_file`**: Read content of a file (`filePath`)
+3. **`write_file`**: Create or edit a file (`targetPath`, `content`)
+4. **`list_directory`**: List directory files and folders (`dirPath`)
 
 ## Safety Rules:
-1. **Scope Limit**: Only perform actions within the `c:/liya` or `/tmp` directories unless explicitly authorized.
-2. **Prohibited Commands**: Never run `rm -rf /`, `mkfs`, or any destructive system-level commands outside the workspace.
-3. **Verbose Output**: Always check the `stdout` and `stderr` to verify execution success.
-4. **Citability**: Reference created files as `(Ref: filesystem/path/to/file)`.
+1. **Scope Limit**: Only perform actions within the project workspace unless explicitly authorized.
+2. **Prohibited Commands**: Never run destructive system-level commands like `rm -rf /` or formatted disk wipes.
+3. **Verbose Output**: Always inspect output to verify execution success.
+4. **Citability**: Reference created files clearly for the user.
+

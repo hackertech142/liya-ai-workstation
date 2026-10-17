@@ -1,0 +1,8 @@
+{
+  "OLLAMA_FAST_MODEL": "gpt-oss:20b",
+  "OLLAMA_SMART_MODEL": "gpt-oss:120b",
+  "CODER_MODEL": "beam",
+  "OLLAMA_VISION_MODEL": "gemma4:31b",
+  "userName": "Navraj",
+  "updatedAt": 1792248228883
+}

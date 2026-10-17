@@ -79,6 +79,32 @@ module.exports = { io }; // Export for other modules
 const { analyzeSnapshot } = require('./visionHandler.js');
 const PORT = process.env.PORT || 3000;
 
+// --- SETTINGS SYNC (Sync UI model choices with backend) ---
+app.get('/api/settings', async (req, res) => {
+    try {
+        const settingsPath = path.resolve(__dirname, '../brain/settings.json');
+        const settings = await fs.readJson(settingsPath).catch(() => ({}));
+        res.json(settings);
+    } catch (e) {
+        res.json({});
+    }
+});
+
+app.post('/api/settings', async (req, res) => {
+    try {
+        const settingsPath = path.resolve(__dirname, '../brain/settings.json');
+        await fs.ensureDir(path.dirname(settingsPath));
+        let existing = {};
+        try { existing = await fs.readJson(settingsPath); } catch {}
+        const updated = { ...existing, ...req.body, updatedAt: Date.now() };
+        await fs.writeJson(settingsPath, updated, { spaces: 2 });
+        console.log("[Settings] Synced model settings from UI:", req.body);
+        res.json({ success: true, settings: updated });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- CURRENCY PROXY ---
 app.get('/currency/live', async (req, res) => {
     try {
@@ -570,6 +596,10 @@ let canvasState = {
 
 // 1. Ollama Cloud API — Native streaming proxy (avoids ECONNRESET with http-proxy-middleware on long streams)
 app.use('/cloud-api', (req, res) => {
+    // Generous 10-minute socket timeout for massive 32K token generations
+    req.setTimeout(600000);
+    res.setTimeout(600000);
+
     const upstreamPath = req.url;
     let authHeader = req.headers['authorization']?.replace('Bearer ', '').trim();
     if (authHeader === 'BACKEND_MANAGED') authHeader = null;
@@ -580,6 +610,7 @@ app.use('/cloud-api', (req, res) => {
         port: 443,
         path: upstreamPath,
         method: req.method,
+        timeout: 600000,
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`,
@@ -1655,13 +1686,20 @@ app.post('/api/terminal/run', (req, res) => {
 
 // 4.1 Web Browser Agent (Smart Scraper v2 — Markdown + Stealth + Jina Fallback)
 app.post('/api/web/browse', async (req, res) => {
-    const { url, action = 'markdown', maxChars } = req.body;
+    const { url, action = 'markdown', maxChars, model, takeScreenshot, viewportType, pushToCanvas = false } = req.body;
     if (!url) return res.status(400).json({ error: 'URL required' });
 
-    console.log(`[Browse:v2] Smart browsing: ${url} (Action: ${action})`);
+    console.log(`[Browse:v2] Smart browsing: ${url} (Action: ${action}, Model: ${model || 'settings-sync'}, PushToCanvas: ${pushToCanvas})`);
 
     try {
-        const result = await smartBrowse(url, { action, maxChars: maxChars || 15000 });
+        const result = await smartBrowse(url, { 
+            action, 
+            maxChars: maxChars || 15000,
+            model,
+            takeScreenshot,
+            viewportType,
+            pushToCanvas
+        });
         res.json(result);
     } catch (e) {
         console.error(`[Browse:v2] Error visiting ${url}:`, e.message);

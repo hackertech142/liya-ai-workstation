@@ -17,6 +17,7 @@ const TurndownService = require('turndown');
 const axios = require('axios');
 const path = require('path');
 const fs = require('fs-extra');
+const { spawn } = require('child_process');
 
 // --- STEALTH: Rotating User-Agents ---
 const USER_AGENTS = [
@@ -44,7 +45,7 @@ turndown.remove(['script', 'style', 'nav', 'footer', 'aside', 'iframe', 'noscrip
 
 // --- CORE: Smart Browse (Playwright + Readability + Turndown) ---
 // Canvas Summarizer Helper
-async function summarizeAndPushToCanvas(title, rawMarkdown, isFallback = false, screenshotPath = '') {
+async function summarizeAndPushToCanvas(title, rawMarkdown, isFallback = false, screenshotPath = '', modelOverride = null) {
     const { pushToCanvas } = require('./canvasBridge');
     const id = isFallback ? `browse_fallback_${Date.now()}` : `browse_${Date.now()}`;
     const label = isFallback ? 'SMART BROWSER (FALLBACK)' : 'SMART BROWSER';
@@ -68,9 +69,9 @@ async function summarizeAndPushToCanvas(title, rawMarkdown, isFallback = false, 
     // Run LLM Summary
     try {
         const { Ollama } = require('ollama');
-        const { getBackendApiKey } = require('./configHelper');
+        const { getBackendApiKey, getBackendModel } = require('./configHelper');
         const apiKey = getBackendApiKey('VITE_OLLAMA_CLOUD_API_KEY');
-        const model = process.env.VITE_CODER_MODEL || 'gpt-os:120b-cloud';
+        const model = modelOverride || getBackendModel('OLLAMA_SMART_MODEL', 'gemma4:31b-cloud');
         
         if (!apiKey) throw new Error("No API key for summarizer");
 
@@ -110,17 +111,87 @@ ${rawMarkdown.substring(0, 6000)}`;
     }
 }
 
+// --- Crawl4AI Engine (Primary High-Speed LLM Crawler) ---
+async function crawlWithCrawl4AI(url, options = {}) {
+    const { maxChars = 15000 } = options;
+    return new Promise((resolve, reject) => {
+        const pythonPath = 'python';
+        const scriptPath = path.join(__dirname, 'crawl4ai_runner.py');
+        const child = spawn(pythonPath, [scriptPath, url, String(maxChars)], {
+            timeout: 25000,
+            windowsHide: true,
+            env: { ...process.env, CRAWL4AI_NO_CLOUD_NOTICE: '1' }
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout.on('data', data => {
+            stdout += data.toString();
+        });
+        child.stderr.on('data', data => {
+            stderr += data.toString();
+        });
+
+        child.on('close', code => {
+            if (code !== 0) {
+                return reject(new Error(`Crawl4AI exited with code ${code}: ${stderr || stdout}`));
+            }
+            try {
+                const match = stdout.match(/__CRAWL4AI_JSON_START__([\s\S]*?)__CRAWL4AI_JSON_END__/);
+                if (!match) {
+                    return reject(new Error('Crawl4AI delimiter not found in runner output'));
+                }
+                const parsed = JSON.parse(match[1]);
+                if (!parsed.success) {
+                    return reject(new Error(parsed.error || 'Crawl4AI reported failure'));
+                }
+                resolve(parsed);
+            } catch (err) {
+                reject(err);
+            }
+        });
+
+        child.on('error', err => {
+            reject(err);
+        });
+    });
+}
+
 async function smartBrowse(url, options = {}) {
     const { 
         action = 'markdown', 
         timeout = 25000, 
         maxChars = 15000,
         takeScreenshot = false,
-        viewportType = 'desktop'
+        viewportType = 'desktop',
+        pushToCanvas = false
     } = options;
 
-    console.log(`[SmartScraper] Browsing: ${url} (Action: ${action}, Screenshot: ${takeScreenshot}, Viewport: ${viewportType})`);
+    console.log(`[SmartScraper] Browsing: ${url} (Action: ${action}, Screenshot: ${takeScreenshot}, Viewport: ${viewportType}, PushToCanvas: ${pushToCanvas})`);
 
+    // ⚡ TIER 1 (PRIMARY): Crawl4AI - Ultra-fast, LLM-optimized crawler
+    if ((action === 'markdown' || action === 'text') && !takeScreenshot) {
+        try {
+            console.log(`[SmartScraper] 🚀 Crawling via Crawl4AI (Primary Engine): ${url}`);
+            const crawlResult = await crawlWithCrawl4AI(url, options);
+            if (crawlResult && crawlResult.markdown && crawlResult.markdown.trim().length > 30) {
+                console.log(`[SmartScraper] ✅ Crawl4AI Success: ${crawlResult.charCount} chars in ${url}`);
+                if (pushToCanvas && !options.silent) {
+                    summarizeAndPushToCanvas(crawlResult.title || url, crawlResult.markdown, false, '', options.model);
+                }
+                if (action === 'text') {
+                    crawlResult.text = crawlResult.markdown;
+                }
+                return crawlResult;
+            }
+            console.warn(`[SmartScraper] Crawl4AI returned sparse content. Falling back to Playwright.`);
+        } catch (crawlErr) {
+            console.warn(`[SmartScraper] Crawl4AI failed (${crawlErr.message}). Seamlessly falling back to Playwright...`);
+        }
+    }
+
+    // 🛡️ TIER 2 (FALLBACK): Playwright-Extra + Readability + Turndown
     let browser;
     try {
         browser = await chromium.launch({
@@ -270,9 +341,9 @@ async function smartBrowse(url, options = {}) {
             result.screenshotPath = screenshotPath; // Inject screenshot path
         }
 
-        // [UI] Push to Canvas for instant viewing (Summarized async)
-        if (action === 'markdown' && result.markdown && !options.silent) {
-            summarizeAndPushToCanvas(result.title || url, result.markdown, false, result.screenshotPath);
+        // [UI] Push to Canvas only if explicitly requested
+        if (pushToCanvas && action === 'markdown' && result.markdown && !options.silent) {
+            summarizeAndPushToCanvas(result.title || url, result.markdown, false, result.screenshotPath, options.model);
         }
 
         await browser.close();
@@ -284,7 +355,7 @@ async function smartBrowse(url, options = {}) {
 
         // FALLBACK: Use Jina.ai Reader API (Free, no key needed)
         console.log(`[SmartScraper] Falling back to Jina.ai reader...`);
-        return await jinaFallback(url, options.maxChars || 15000);
+        return await jinaFallback(url, options.maxChars || 15000, pushToCanvas, options.model);
     }
 }
 
@@ -352,7 +423,7 @@ function extractMarkdown(html, url, title, maxChars = 15000) {
 
 
 // --- Jina.ai Reader Fallback (100% Free, No API Key) ---
-async function jinaFallback(url, maxChars = 15000) {
+async function jinaFallback(url, maxChars = 15000, pushToCanvas = false, modelOverride = null) {
     try {
         const jinaUrl = `https://r.jina.ai/${url}`;
         const response = await axios.get(jinaUrl, {
@@ -376,8 +447,10 @@ async function jinaFallback(url, maxChars = 15000) {
             method: 'jina-fallback'
         };
 
-        // [UI] Push to Canvas (Summarized async)
-        summarizeAndPushToCanvas(result.title, result.markdown, true);
+        // [UI] Push to Canvas only if explicitly requested
+        if (pushToCanvas) {
+            summarizeAndPushToCanvas(result.title, result.markdown, true, '', modelOverride);
+        }
 
         return result;
     } catch (e) {

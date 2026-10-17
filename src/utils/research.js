@@ -25,7 +25,11 @@ const fetchWebCrawl = async (query, env = null) => {
         // 2. Visit top URLs in parallel for full context
         const crawlResults = await Promise.allSettled(results.map(async (res) => {
             try {
-                const browseRes = await api.post('/api/web/browse', { url: res.url, action: 'text' });
+                const browseRes = await api.post('/api/web/browse', { 
+                    url: res.url, 
+                    action: 'text',
+                    model: localStorage.getItem('OLLAMA_SMART_MODEL') || undefined
+                });
                 const fullText = browseRes.data?.text || "";
                 return `[Source: ${res.title} (${res.url})]\n${fullText.substring(0, 3000)}`; // Cap at 3k per page
             } catch (e) {
@@ -61,7 +65,8 @@ const fetchPageContent = async (url, env = null) => {
             url, 
             action: takeScreenshot ? 'markdown' : 'text',
             takeScreenshot,
-            viewportType
+            viewportType,
+            model: localStorage.getItem('OLLAMA_SMART_MODEL') || undefined
         });
         
         const fullText = takeScreenshot ? (browseRes.data?.markdown || "") : (browseRes.data?.text || "");

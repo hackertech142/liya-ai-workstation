@@ -20,11 +20,12 @@ export const estimateTokens = (content) => {
 /**
  * Summarize older parts of the conversation to save space
  */
-export const optimizeContext = async (messages) => {
+export const optimizeContext = async (messages, options = {}) => {
+    const threshold = options.threshold || SUMMARIZE_THRESHOLD;
     const totalTokens = messages.reduce((acc, m) => acc + estimateTokens(m.content), 0);
-    console.log(`🛡️ Token Guardian: Current context ~${totalTokens} tokens.`);
+    console.log(`🛡️ Token Guardian: Current context ~${totalTokens} tokens (Threshold: ${threshold}).`);
 
-    if (totalTokens < SUMMARIZE_THRESHOLD) return messages;
+    if (totalTokens < threshold) return messages;
 
     console.warn(`⚠️ Token limit nearing (${totalTokens}). Optimizing context...`);
 

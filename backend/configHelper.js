@@ -46,4 +46,34 @@ function getBackendApiKey(keyName) {
     return null;
 }
 
-module.exports = { getBackendApiKey };
+function getBackendModel(modelKey, fallback = 'gemma4:31b-cloud') {
+    if (process.env[modelKey]) {
+        return process.env[modelKey];
+    }
+    
+    // Check brain/settings.json (persisted settings from client Settings UI)
+    try {
+        const settingsPath = path.resolve(__dirname, '../brain/settings.json');
+        if (fs.existsSync(settingsPath)) {
+            const settings = fs.readJsonSync(settingsPath);
+            const val = settings[modelKey] || settings[modelKey.replace('VITE_', '')];
+            if (val) return val;
+        }
+    } catch (e) {
+        console.warn(`[ConfigHelper] Error reading brain/settings.json for ${modelKey}:`, e.message);
+    }
+    
+    // Check .env file
+    try {
+        const envPath = path.resolve(__dirname, '../.env');
+        if (fs.existsSync(envPath)) {
+            const envConfig = dotenv.parse(fs.readFileSync(envPath, 'utf8'));
+            const val = envConfig[modelKey] || envConfig[modelKey.replace('VITE_', '')];
+            if (val) return val;
+        }
+    } catch (e) {}
+
+    return fallback;
+}
+
+module.exports = { getBackendApiKey, getBackendModel };
