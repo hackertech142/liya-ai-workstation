@@ -341,7 +341,7 @@ function App() {
         if (art) {
           setMessages(prev => {
             if (prev.length === 1 && prev[0].content.includes("SYSTEM ONLINE")) {
-              return [{ role: 'assistant', content: `SYSTEM ONLINE. ${APP_NAME} Protocol v3.0 initialized.\n${art} \nReady for input.` }];
+              return [{ role: 'assistant', content: `SYSTEM ONLINE. ${APP_NAME} Tactical Co-Pilot initialized.\n${art} \nAll systems nominal, Boss. Ready for commands.` }];
             }
             return prev;
           });
