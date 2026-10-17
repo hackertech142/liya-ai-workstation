@@ -455,6 +455,7 @@ app.post('/api/vision/analyze', async (req, res) => {
 app.post('/api/whisper/youtube', async (req, res) => {
     const { query } = req.body;
     try {
+        try { delete require.cache[require.resolve('./youtubeService')]; } catch (_) {}
         const { searchYouTube } = require('./youtubeService');
         const { pushToCanvas } = require('./canvasBridge');
 
