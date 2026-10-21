@@ -33,11 +33,22 @@ const SettingsControl = () => {
         });
         setApiKeys(initialKeys);
 
-        // Load Models dynamically from backend settings or localStorage
+        // Load Models and API Keys dynamically from backend settings
         const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
         fetch(`${backendUrl}/api/settings`)
             .then(res => res.ok ? res.json() : null)
             .then(data => {
+                if (data && data.apiKeys) {
+                    setApiKeys(prev => {
+                        const merged = { ...prev };
+                        Object.keys(merged).forEach(k => {
+                            if (!merged[k] && data.apiKeys[k]) {
+                                merged[k] = data.apiKeys[k];
+                            }
+                        });
+                        return merged;
+                    });
+                }
                 if (data && data.settings) {
                     const s = data.settings;
                     setModels({
@@ -83,7 +94,7 @@ const SettingsControl = () => {
         localStorage.setItem('CODER_MODEL', models.CODER_MODEL);
         localStorage.setItem('OLLAMA_VISION_MODEL', models.OLLAMA_VISION_MODEL);
 
-        // Sync Models with Backend dynamically
+        // Sync Models and API Keys with Backend (automatically updates .env file!)
         const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
         fetch(`${backendUrl}/api/settings`, {
             method: 'POST',
@@ -93,7 +104,8 @@ const SettingsControl = () => {
                 OLLAMA_SMART_MODEL: models.OLLAMA_SMART_MODEL,
                 CODER_MODEL: models.CODER_MODEL,
                 OLLAMA_VISION_MODEL: models.OLLAMA_VISION_MODEL,
-                userName
+                userName,
+                apiKeys
             })
         }).catch(err => console.warn("Failed to sync settings with backend:", err));
 

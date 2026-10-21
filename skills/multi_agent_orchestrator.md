@@ -1,42 +1,32 @@
-# Skill: Multi-Agent Orchestrator
-**Expertise**: Complex Task Decomposition, Sub-Agent Management, Multi-Step Workflows.
-**Source**: Enhanced by OpenClaw Meta-Agent Patterns.
+# Skill: Multi-Agent Strategic Orchestrator
+**Expertise**: Strategic Planning, Intent & Knowledge Gap Analysis, Sub-Agent Delegation, Multi-Model Routing.
 
-## 🧠 Core Workflow (The 6 Phases)
+## 🧠 Strategic Architecture (The 5 Phases)
 
-### 1. Decomposition
-Break the macro task into independent, parallelizable subtasks.
-- Identify success criteria and dependencies.
-- Create a dependency graph for sequential work.
+### 1. Intent Comprehension & Gap Analysis
+Before acting or delegating:
+- Deeply understand user's language (Hinglish/English/Hindi).
+- Extract real-world entities (movies, tech, people, repos, devices).
+- Detect knowledge gaps: Do we need real-time news (`news`), web verification (`research`), URL reading (`smart_browse`), or user memory (`memory`)?
 
-### 2. Generation & Dispatch
-For each subtask, spawn a dedicated background agent via the `spawn` tool.
-- Provide a clear role (e.g., Collector, Analyst, Writer).
-- Provide explicit input/output specifications.
-- Dispatch instructions via a virtual `inbox`.
+### 2. Strategy Formulation
+- Devise an actionable step-by-step gameplan.
+- Avoid snap judgments; verify facts before making claims.
+- Select the optimal model role:
+  - **`smart`**: Deep analysis, fact verification, movie/series/tech comparisons, reasoning.
+  - **`coder`**: Programming, web pages, HTML/CSS animations, scripts, debugging.
+  - **`fast`**: ONLY zero-tool pure conversational greetings.
 
-### 3. Execution Monitoring
-Track background agent progress via status checkpoints.
-- Use `running`, `completed`, or `failed` states.
-- Intervene ONLY if an agent reports being `BLOCKED`.
+### 3. Decomposition & Delegation
+For heavy, multi-step tasks:
+- Spawn dedicated background sub-agents via the `spawn` tool (`role: "coder"` or `role: "researcher"`).
+- For quick synchronous tasks, call targeted tools directly (`research`, `news`, `calculator`, `home_automation`).
 
-### 4. Consolidation
-Merge outputs from all agents once they report `completed`.
-- Validate deliverables against the original macro task requirements.
-- Resolve any conflicts between overlapping agent outputs.
+### 4. Progress & Synthesis
+- Monitor sub-tasks and background execution.
+- Merge evidence and synthesize a cohesive response structured with clear headings and insights.
 
-### 5. Review & Finalization
-Submit the consolidated work for a final quality review before presenting it to the human.
+### 5. Final Delivery
+- Deliver an executive answer aligned with Master's persona preferences.
+- If code or UI was produced, ensure it is presented cleanly in markdown blocks for auto-canvas rendering.
 
-### 6. Dissolution
-Clean up temporary files and archive agent workspaces.
-
-## 📂 Communication Protocol
-- **Inbox**: Read-only instructions for the agent.
-- **Outbox**: Write-only results for the orchestrator.
-- **Status**: Real-time state tracking.
-
-## 🚀 Execution Strategy
-When Navraj gives a massive task (e.g., "Build a full app" or "Perform global analysis"):
-- Use this orchestrator role to manage the "Big Picture".
-- Spawn specialized sub-agents for the details.

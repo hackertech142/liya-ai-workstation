@@ -10,7 +10,8 @@
     "stop": "C:\\PROGRA~1\\Cloudflare\\CLOUDF~1\\warp-cli.exe disconnect",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "npx playwright install chromium"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",
@@ -40,7 +41,7 @@
     "node-cron": "^3.0.3",
     "ollama": "^0.6.3",
     "pdfjs-dist": "^5.4.530",
-    "playwright": "^1.44.1",
+    "playwright": "^1.58.2",
     "react": "^19.2.0",
     "react-diff-viewer-continued": "^4.2.0",
     "react-dom": "^19.2.0",

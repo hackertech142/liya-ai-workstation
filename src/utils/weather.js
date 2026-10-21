@@ -15,31 +15,45 @@ export const fetchWeather = async (city) => {
         }
     }
 
-    if (!API_KEY) {
-        console.error("Weather API Key missing!");
-        return null;
+    if (API_KEY && !API_KEY.includes('your_weather')) {
+        try {
+            const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=metric`);
+            if (response.ok) {
+                const data = await response.json();
+                if (data && data.weather) {
+                    const resultString = `[Current Weather in ${data.name}, ${data.sys.country}:
+                    - Condition: ${data.weather[0].description}
+                    - Temp: ${data.main.temp}°C (Feels like ${data.main.feels_like}°C)
+                    - Humidity: ${data.main.humidity}%
+                    - Wind: ${data.wind.speed} m/s
+                    ]`;
+
+                    localStorage.setItem(CACHE_KEY, JSON.stringify({
+                        timestamp: Date.now(),
+                        content: resultString
+                    }));
+
+                    return resultString;
+                }
+            }
+        } catch (e) {
+            console.warn("OpenWeatherMap fetch error, trying fallback:", e);
+        }
     }
 
+    // Try Free wttr.in Fallback
     try {
-        // Connect directly to openweathermap API
-        const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=metric`);
-
-        if (!response.ok) {
-            console.error("Weather API Failed:", response.status, response.statusText);
-            return null;
-        }
-
-        const data = await response.json();
-
-        if (data && data.weather) {
-            const resultString = `[Current Weather in ${data.name}, ${data.sys.country}:
-            - Condition: ${data.weather[0].description}
-            - Temp: ${data.main.temp}°C (Feels like ${data.main.feels_like}°C)
-            - Humidity: ${data.main.humidity}%
-            - Wind: ${data.wind.speed} m/s
+        const response = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`);
+        if (response.ok) {
+            const data = await response.json();
+            const current = data.current_condition[0];
+            const resultString = `[Current Weather in ${city}:
+            - Condition: ${current.weatherDesc[0]?.value || 'Clear'}
+            - Temp: ${current.temp_C}°C (Feels like ${current.FeelsLikeC}°C)
+            - Humidity: ${current.humidity}%
+            - Wind: ${current.windspeedKmph} km/h
             ]`;
 
-            // SAVE TO CACHE
             localStorage.setItem(CACHE_KEY, JSON.stringify({
                 timestamp: Date.now(),
                 content: resultString
@@ -47,9 +61,7 @@ export const fetchWeather = async (city) => {
 
             return resultString;
         }
-
         return "[Weather data not found]";
-
     } catch (e) {
         console.error("Weather Fetch Error:", e);
         return null;

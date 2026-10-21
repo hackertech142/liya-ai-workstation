@@ -190,12 +190,10 @@ const SystemControl = ({
                                                                 <motion.path
                                                                     d="M0,50 Q25,30 50,50 T100,50 V100 H0 Z"
                                                                     fill="url(#wave-grad)"
-                                                                    animate={{ d: [
-                                                                        "M0,50 Q25,30 50,50 T100,50 V100 H0 Z",
-                                                                        "M0,50 Q25,70 50,50 T100,50 V100 H0 Z",
-                                                                        "M0,50 Q25,30 50,50 T100,50 V100 H0 Z"
-                                                                    ]}}
-                                                                    transition={{ duration: 4, repeat: Infinity }}
+                                                                    animate={{ 
+                                                                        opacity: [0.4, 0.85, 0.4]
+                                                                    }}
+                                                                    transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
                                                                 />
                                                                 <defs>
                                                                     <linearGradient id="wave-grad" x1="0" y1="0" x2="0" y2="1">

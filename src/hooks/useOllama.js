@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 
 import { memoryManager } from '../utils/MemoryManager';
-import { planAndExecute } from '../utils/orchestrator';
+import { planAndExecute, hasImageIntent } from '../utils/orchestrator';
 import { optimizeContext } from '../utils/tokenGuardian';
 import { getLiyaSystemPrompt } from '../utils/prompts';
 import { useOllamaStream } from './useOllamaStream';
@@ -87,12 +87,28 @@ export function useOllama() {
                     })
                 ]);
 
-                const { context: toolContext, thought: planThought, role: planRole, directUI, isDirectFallback } = orchestratorOutput || {};
+                const {
+                    context: toolContext,
+                    thought: planThought,
+                    strategy: planStrategy,
+                    understanding: planUnderstanding,
+                    role: planRole,
+                    directUI,
+                    isDirectFallback
+                } = orchestratorOutput || {};
                 if (planRole) plannedModelRole = planRole;
 
                 if (memResults) memoryContext = `[Relevant Memories]:\n${memResults}`;
                 if (toolContext) orchestratedContext = toolContext;
-                if (planThought) orchestratedContext = `[INTERNAL_PLAN: ${planThought}]\n\n${orchestratedContext}`;
+
+                const strategyPlanBlock = [];
+                if (planUnderstanding) strategyPlanBlock.push(`[INTENT_UNDERSTANDING]: ${planUnderstanding}`);
+                if (planStrategy) strategyPlanBlock.push(`[EXECUTION_STRATEGY]: ${planStrategy}`);
+                else if (planThought) strategyPlanBlock.push(`[INTERNAL_PLAN]: ${planThought}`);
+
+                if (strategyPlanBlock.length > 0) {
+                    orchestratedContext = `${strategyPlanBlock.join('\n')}\n\n${orchestratedContext}`;
+                }
 
                 // Fetch Project Blackboard only if relevant or tasks are active
                 const queryForBB = (lastUserText || "").toLowerCase();
@@ -114,21 +130,33 @@ export function useOllama() {
                 if (directUI) {
                     let injectionText = directUI;
                     
-                    if (isDirectFallback) {
-                        // Strip the system note intended for the LLM
-                        injectionText = injectionText.split('\n\n(System Note')[0];
+                    // Strip the system note intended for the LLM
+                    injectionText = injectionText.split('\n\n(System Note')[0];
+
+                    const isImageQuery = isDirectFallback || hasImageIntent(lastUserText);
+                    if (isImageQuery && !injectionText.includes('ये लीजिये')) {
                         // Add the human-friendly response directly
                         injectionText += '\n\nये लीजिये सर, आपकी फोटोज़! 😊';
                     }
                     
                     console.log("Injecting Direct UI Component to Stream:", injectionText);
                     onChunk(`${injectionText}\n\n`);
-                }
-                
-                // If it's a direct fallback (e.g. LLM refused to fetch an image due to NSFW filter),
-                // we gracefully end the turn here to prevent the LLM from outputting an apology text.
-                if (isDirectFallback) {
-                    console.log("Direct Fallback Mode Active: Bypassing final LLM response.");
+
+                    // If user requested images and they are delivered, STOP process completely!
+                    if (isImageQuery) {
+                        console.log("Direct Image Search Complete: Gracefully ending process.");
+                        setIsPlaying(false);
+                        if (onThinking) onThinking(false);
+                        abortControllerRef.current = null;
+                        if (onDone) onDone();
+                        return;
+                    }
+                } else if (isDirectFallback) {
+                    console.log("Direct Fallback Mode Active but no direct images found.");
+                    onChunk("माफ़ कीजिये सर, सीधे सर्च से भी इस विषय की कोई फ़ोटो नहीं मिल सकी। कृपया कोई दूसरा कीवर्ड आज़माएँ।\n\n");
+                    setIsPlaying(false);
+                    if (onThinking) onThinking(false);
+                    abortControllerRef.current = null;
                     if (onDone) onDone();
                     return;
                 }
@@ -291,12 +319,19 @@ export function useOllama() {
             if (!effectiveKey) throw new Error("Missing Cloud API Key.");
 
             const reasoningEffort = isOcrTask ? 'high' : (options.reasoningEffort || localStorage.getItem('REASONING_EFFORT') || 'medium');
-            const finalReasoningEffort = tierClassification === 'smart' ? 'high' : (options.reasoningEffort || 'low');
+            const finalReasoningEffort = tierClassification === 'smart' 
+                ? (options.reasoningEffort || localStorage.getItem('REASONING_EFFORT') || 'medium') 
+                : (options.reasoningEffort || 'low');
 
-            // Coder tasks require massive generation window (32K) & deep context (64K) so large reasoning models (like beam) never run out of tokens
-            const customOptions = tierClassification === 'coder' 
-                ? { num_predict: 32768, num_ctx: 65536 } 
-                : {};
+            // Set generous generation window & deep context across tiers so reasoning models (gpt-oss, beam, etc.) never choke
+            let customOptions = {};
+            if (tierClassification === 'coder') {
+                customOptions = { num_predict: 32768, num_ctx: 65536 };
+            } else if (tierClassification === 'smart') {
+                customOptions = { num_predict: 8192, num_ctx: 32768 };
+            } else {
+                customOptions = { num_predict: 4096, num_ctx: 16384 };
+            }
 
             await streamChat({
                 modelToUse,

@@ -354,29 +354,63 @@ const tools = [
         execute: async ({ city }, env) => {
             const { getBackendApiKey } = require('./configHelper');
             const apiKey = getBackendApiKey('VITE_WEATHER_API_KEY');
-            if (env.reportProgress) env.reportProgress(`⛅ Fetching weather for ${city}...`);
-            if (!apiKey) return "Error: Weather API Key is missing on the server. Please add VITE_WEATHER_API_KEY to system settings or .env file.";
+            if (env && env.reportProgress) env.reportProgress(`⛅ Fetching live weather for ${city}...`);
+
+            // Try 1: OpenWeatherMap (if valid key configured)
+            if (apiKey && !apiKey.includes('your_weather')) {
+                try {
+                    const response = await axios.get(`https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric`, { timeout: 6000 });
+                    const data = response.data;
+                    const report = `[Current Weather in ${data.name}, ${data.sys.country}:
+                    - Condition: ${data.weather[0].description}
+                    - Temp: ${data.main.temp}°C (Feels like ${data.main.feels_like}°C)
+                    - Humidity: ${data.main.humidity}%
+                    - Wind: ${data.wind.speed} m/s
+                    ]`;
+                    const { pushToCanvas } = require('./canvasBridge');
+                    pushToCanvas({
+                        id: `weather_widget`,
+                        type: 'metric',
+                        label: `Weather: ${city}`,
+                        value: `${Math.round(data.main.temp)}°C`,
+                        trend: 'neutral'
+                    });
+                    return report;
+                } catch (e) {
+                    console.warn("[Weather] OpenWeatherMap failed, switching to free wttr.in fallback:", e.message);
+                }
+            }
+
+            // Try 2: Free wttr.in fallback (Zero API key required, 100% reliable)
             try {
-                const response = await axios.get(`https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric`);
-                const data = response.data;
-                const report = `[Current Weather in ${data.name}, ${data.sys.country}:
-                - Condition: ${data.weather[0].description}
-                - Temp: ${data.main.temp}°C (Feels like ${data.main.feels_like}°C)
-                - Humidity: ${data.main.humidity}%
-                - Wind: ${data.wind.speed} m/s
+                const res = await axios.get(`https://wttr.in/${encodeURIComponent(city)}?format=j1`, { timeout: 7000 });
+                const current = res.data.current_condition[0];
+                const weatherDesc = current.weatherDesc[0]?.value || 'Clear';
+                const tempC = current.temp_C;
+                const feelsLike = current.FeelsLikeC;
+                const humidity = current.humidity;
+                const windSpeed = current.windspeedKmph;
+
+                const report = `[Current Weather in ${city}:
+                - Condition: ${weatherDesc}
+                - Temp: ${tempC}°C (Feels like ${feelsLike}°C)
+                - Humidity: ${humidity}%
+                - Wind: ${windSpeed} km/h
                 ]`;
+
                 const { pushToCanvas } = require('./canvasBridge');
                 pushToCanvas({
                     id: `weather_widget`,
                     type: 'metric',
                     label: `Weather: ${city}`,
-                    value: `${Math.round(data.main.temp)}°C`,
+                    value: `${Math.round(tempC)}°C`,
                     trend: 'neutral'
                 });
+
                 return report;
-            } catch (e) {
-                console.error("Backend Weather Error:", e.message);
-                return `Failed to fetch weather for ${city}: ${e.message}`;
+            } catch (fallbackErr) {
+                console.error("Backend Weather Error:", fallbackErr.message);
+                return `Failed to fetch weather for ${city}: ${fallbackErr.message}`;
             }
         }
     },

@@ -38,7 +38,11 @@ export const useScheduler = () => {
             }
         });
 
-        return () => socket.disconnect();
+        return () => {
+            socket.off('connect');
+            socket.off('jobs-updated');
+            socket.off('notification');
+        };
     }, []);
 
     const addScheduledTask = async (task) => {

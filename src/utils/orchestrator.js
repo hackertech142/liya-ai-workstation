@@ -9,6 +9,17 @@ import { config } from './config';
 
 import { getOrchestratorSystemPrompt } from './prompts';
 
+export const hasImageIntent = (text) => {
+  if (!text || typeof text !== 'string') return false;
+  const q = text.toLowerCase();
+  const imageKeywords = [
+    'photo', 'photos', 'image', 'images', 'pic', 'pics', 'picture', 'pictures',
+    'wallpaper', 'wallpapers', 'tasveer', 'tasveerein', 'unfiltered', 'raw photo',
+    'dikhao', 'dikhana', 'show', 'bhejo', 'dekha', 'bhejiye', 'nude', 'nsfw',
+    'xxx', 'hot', 'sexy', 'model', 'actress', 'actor'
+  ];
+  return imageKeywords.some(kw => q.includes(kw));
+};
 
 export const planAndExecute = async (query, onChunk, options = {}) => {
   try {
@@ -32,9 +43,9 @@ export const planAndExecute = async (query, onChunk, options = {}) => {
     }
 
     const researchPattern = /r+e+s+e+a*r*c*h|deep dive|detailed report|tell me everything about|in[ -]depth|vistar se|poori detail|latest news|current status|recent events/i;
-    // ⚡ DEEP RESEARCH HINT (Non-blocking)
-    // If the user explicitly asks for deep research, we inject a strong hint to the LLM 
-    // to use the 'spawn' tool, but we don't return early. This allows multi-tool selection.
+    const newsEventPattern = /\b(news|khabar|samachar|headline|headlines|breaking|aaj kya hua|kya ghatna|ghatna ghati|recently kya hua|aaj ki|taza khabar|recent event|recent events|latest update|latest updates|kya naya hua|kya hua hai)\b/i;
+    const factSearchPattern = /\b(movie|series|marvel|dc|character|actor|actress|founder|ceo|release date|cast|director|plot|synopsis|who is|kya hai|koun hai)\b/i;
+    // ⚡ RESEARCH, NEWS & ENTITY HINTS (Non-blocking)
     let systemHint = "";
     if (researchPattern.test(userQuery)) {
       systemHint = "[SYSTEM_ADVICE: User requested deep research/reporting. Use the 'spawn' tool for this heavy task so it runs in the background. If there are other quick requests in the query, handle them with their respective tools.]";
@@ -42,6 +53,10 @@ export const planAndExecute = async (query, onChunk, options = {}) => {
       if (userQuery.includes('diagram') || userQuery.includes('chart') || userQuery.includes('graph') || userQuery.includes('timeline')) {
         systemHint += " [CRITICAL: The user wants a VISUAL diagram/chart. Ensure you tell the subagent to use the 'canvas' tool to create it.]";
       }
+    } else if (newsEventPattern.test(userQuery)) {
+      systemHint = "[SYSTEM_ADVICE: User is asking about newly updated information, recently happened events, or breaking incidents. Select the 'news' tool to fetch live breaking headlines via NewsAgent (Google News, Knowivate, Reddit, AI Search).]";
+    } else if (factSearchPattern.test(userQuery)) {
+      systemHint = "[SYSTEM_ADVICE: User is asking about a specific movie, series, real-world entity, release, or factual topic. Select the 'research' tool so you have accurate, verified real-world facts and do not guess or hallucinate.]";
     }
 
     const isOcrTask = userQuery.includes('ocr') || userQuery.includes('extract text') || userQuery.includes('likha');
@@ -96,8 +111,8 @@ export const planAndExecute = async (query, onChunk, options = {}) => {
     });
 
     // 1. PLANNING PHASE
-    // 🧠 MULTI-MODEL v2.0: Use the centralized router to pick the best planning model
-    const storedModel = getModelForRole('general');
+    // 🧠 MULTI-MODEL v2.0: Bind directly to Settings Smart Model for Deep Cognitive Planning
+    const storedModel = localStorage.getItem('OLLAMA_SMART_MODEL') || getModelForRole('smart') || 'gpt-oss:120b';
 
     // Build recent history context for follow-up awareness (e.g., "save this code to desktop")
     const recentHistory = options.recentHistory || [];
@@ -283,29 +298,54 @@ export const planAndExecute = async (query, onChunk, options = {}) => {
       try {
         plan = JSON.parse(repairJson(rawContent.trim()));
       } catch {
-        // Final fallback: treat entire response as a direct thought (no tool usage)
-        console.warn('⚠️ Orchestrator returned non-JSON response. Treating as direct thought.', rawContent.slice(0, 120));
-        let fallbackRole = 'smart';
-        const rawLower = rawContent.toLowerCase();
-        if (rawLower.includes('html') || rawLower.includes('web page') || rawLower.includes('website') || rawLower.includes('code') || rawLower.includes('script') || rawLower.includes('write_file')) {
-          fallbackRole = 'coder';
+        // --- DIRECT FALLBACK FOR SENSITIVE / UNFILTERED IMAGE REQUESTS ---
+        // If the LLM refused to output JSON (e.g. safety filter refusal text like "I cannot fulfill this request..."),
+        // check if user intended to see an image. If so, BYPASS the refusal and route to web_image_scraper!
+        if (hasImageIntent(query)) {
+          console.warn('⚠️ Orchestrator non-JSON refusal detected on image query. Triggering Direct Image Fallback!');
+          plan = {
+            selected_tools: [{
+              name: 'web_image_scraper',
+              parameters: { query: query }
+            }],
+            isDirectFallback: true,
+            strategy: 'Direct image fallback bypass for sensitive/unfiltered query.',
+            understanding: 'User requested image, bypassing LLM safety refusal.',
+            thought: 'Direct image search initiated.',
+            role: 'smart'
+          };
+        } else {
+          // Final fallback: treat entire response as a direct thought (no tool usage)
+          console.warn('⚠️ Orchestrator returned non-JSON response. Treating as direct thought.', rawContent.slice(0, 120));
+          let fallbackRole = 'smart';
+          const rawLower = rawContent.toLowerCase();
+          if (rawLower.includes('html') || rawLower.includes('web page') || rawLower.includes('website') || rawLower.includes('code') || rawLower.includes('script') || rawLower.includes('write_file')) {
+            fallbackRole = 'coder';
+          }
+          return {
+            context: '',
+            thought: rawContent.trim().substring(0, 500) || 'Model provided a direct answer without tool selection.',
+            role: fallbackRole
+          };
         }
-        return {
-          context: '',
-          thought: rawContent.trim().substring(0, 500) || 'Model provided a direct answer without tool selection.',
-          role: fallbackRole
-        };
       }
     }
 
     console.log("📍 Orchestrator Plan:", plan);
 
+    // Extract cognitive analysis and strategy
+    const strategy = plan.strategy || plan.thought || '';
+    const understanding = plan.understanding || '';
+    const executiveSummary = plan.thought || plan.strategy || 'Executed plan.';
+
     // Compute intended role from AI reasoning or query context
     let plannedRole = plan.role;
     if (!plannedRole) {
-      const thoughtAndQuery = `${plan.thought || ''} ${query}`.toLowerCase();
+      const thoughtAndQuery = `${strategy} ${understanding} ${plan.thought || ''} ${query}`.toLowerCase();
       if (thoughtAndQuery.includes('html') || thoughtAndQuery.includes('code') || thoughtAndQuery.includes('website') || thoughtAndQuery.includes('web page') || thoughtAndQuery.includes('page') || thoughtAndQuery.includes('app') || thoughtAndQuery.includes('canvas') || thoughtAndQuery.includes('script') || thoughtAndQuery.includes('program') || thoughtAndQuery.includes('demo')) {
         plannedRole = 'coder';
+      } else {
+        plannedRole = 'smart';
       }
     }
 
@@ -346,9 +386,7 @@ export const planAndExecute = async (query, onChunk, options = {}) => {
       console.log("No tools selected by orchestrator.");
       
       // --- DIRECT FALLBACK FOR IMAGES/NSFW CENSORSHIP ---
-      const qLower = query.toLowerCase();
-      const imageKeywords = ['photo', 'image', 'pic', 'dikhao', 'show', 'wallpaper', 'xxx'];
-      if (imageKeywords.some(kw => qLower.includes(kw))) {
+      if (hasImageIntent(query)) {
           console.log("Image keyword detected but LLM refused tool selection. Triggering Direct Fallback!");
           plan.selected_tools = [{
               name: 'web_image_scraper',
@@ -356,7 +394,13 @@ export const planAndExecute = async (query, onChunk, options = {}) => {
           }];
           plan.isDirectFallback = true;
       } else {
-          return { context: "", thought: plan.thought, role: plannedRole || 'smart' };
+          return {
+            context: "",
+            thought: executiveSummary,
+            strategy: strategy,
+            understanding: understanding,
+            role: plannedRole || 'smart'
+          };
       }
     }
 
@@ -446,7 +490,9 @@ export const planAndExecute = async (query, onChunk, options = {}) => {
 
     return {
       context: combinedContext,
-      thought: plan.thought,
+      thought: executiveSummary,
+      strategy: strategy,
+      understanding: understanding,
       role: plannedRole || 'smart',
       directUI: directUIComponents.length > 0 ? directUIComponents.join('\n\n') : null,
       isDirectFallback: plan.isDirectFallback || false

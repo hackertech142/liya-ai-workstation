@@ -79,28 +79,96 @@ module.exports = { io }; // Export for other modules
 const { analyzeSnapshot } = require('./visionHandler.js');
 const PORT = process.env.PORT || 3000;
 
-// --- SETTINGS SYNC (Sync UI model choices with backend) ---
+// Helper to automatically sync API keys and settings into .env file
+function updateEnvFile(keyValues) {
+    try {
+        const envPath = path.resolve(__dirname, '../.env');
+        if (!fs.existsSync(envPath)) return;
+        
+        let content = fs.readFileSync(envPath, 'utf8');
+        let modified = false;
+
+        for (const [key, rawVal] of Object.entries(keyValues)) {
+            if (!key || rawVal === undefined || rawVal === null) continue;
+            const val = String(rawVal).trim();
+            // Don't write placeholder strings like "your_weather_key_here"
+            if (!val || val.includes('your_') || val.includes('_here')) continue;
+
+            // Immediately update running Node process.env so tools see it without restart
+            process.env[key] = val;
+
+            const regex = new RegExp(`^${key}=.*$`, 'm');
+            if (regex.test(content)) {
+                content = content.replace(regex, `${key}=${val}`);
+            } else {
+                content += `\n${key}=${val}`;
+            }
+            modified = true;
+        }
+
+        if (modified) {
+            fs.writeFileSync(envPath, content, 'utf8');
+            console.log('[EnvSync] ✅ .env file successfully updated with latest settings/keys.');
+        }
+    } catch (err) {
+        console.error('[EnvSync] ❌ Error updating .env file:', err.message);
+    }
+}
+
+// --- SETTINGS SYNC (Sync UI model choices & keys with backend & .env) ---
 app.get('/api/settings', async (req, res) => {
     try {
         const settingsPath = path.resolve(__dirname, '../brain/settings.json');
         const settings = await fs.readJson(settingsPath).catch(() => ({}));
-        res.json(settings);
+        
+        // Also include persisted api keys if available
+        const keysPath = path.resolve(__dirname, '../brain/api_keys.json');
+        const apiKeys = await fs.readJson(keysPath).catch(() => ({}));
+
+        res.json({ settings, apiKeys });
     } catch (e) {
-        res.json({});
+        res.json({ settings: {}, apiKeys: {} });
     }
 });
 
 app.post('/api/settings', async (req, res) => {
     try {
+        const { apiKeys, userName, ...models } = req.body;
+
+        // 1. Automatically update .env file with all API keys entered by user
+        if (apiKeys && typeof apiKeys === 'object') {
+            updateEnvFile(apiKeys);
+
+            // Also persist to brain/api_keys.json
+            const keysFilePath = path.resolve(__dirname, '../brain/api_keys.json');
+            await fs.ensureDir(path.dirname(keysFilePath));
+            const existingKeys = await fs.readJson(keysFilePath).catch(() => ({}));
+            const filteredKeys = {};
+            for (const [k, v] of Object.entries(apiKeys)) {
+                if (v && typeof v === 'string' && !v.includes('your_') && !v.includes('_here')) {
+                    filteredKeys[k] = v.trim();
+                }
+            }
+            await fs.writeJson(keysFilePath, { ...existingKeys, ...filteredKeys }, { spaces: 2 });
+        }
+
+        // 2. Automatically update VITE_USER_NAME in .env
+        if (userName) {
+            updateEnvFile({ VITE_USER_NAME: userName });
+        }
+
+        // 3. Save to brain/settings.json
         const settingsPath = path.resolve(__dirname, '../brain/settings.json');
         await fs.ensureDir(path.dirname(settingsPath));
         let existing = {};
         try { existing = await fs.readJson(settingsPath); } catch {}
         const updated = { ...existing, ...req.body, updatedAt: Date.now() };
         await fs.writeJson(settingsPath, updated, { spaces: 2 });
-        console.log("[Settings] Synced model settings from UI:", req.body);
+
+        console.log("[Settings] Synced model settings and keys from UI. .env updated.");
         res.json({ success: true, settings: updated });
     } catch (e) {
+        console.error("[Settings] Sync error:", e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -150,12 +218,15 @@ async function scrapeDuckDuckGoImages(query) {
 async function scrapeBingImages(query) {
     try {
         const cheerio = require('cheerio');
-        // adlt=off disables safe search (unfiltered)
+        // adlt=off disables safe search (unfiltered) with explicit cookie bypass
         const url = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&form=HDRSC2&first=1&adlt=off`;
         const res = await axios.get(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.5.0.0 Safari/537.36'
-            }
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Cookie': 'SRCHHPGUSR=ADLT=OFF; _EDGE_S=mkt=en-us; MUID=11223344; WLS=TS=1; ipv6=hit=1',
+                'Accept-Language': 'en-US,en;q=0.9'
+            },
+            timeout: 8000
         });
         
         const $ = cheerio.load(res.data);
@@ -172,10 +243,44 @@ async function scrapeBingImages(query) {
                 } catch(e) {}
             }
         });
+
+        // Regex fallback in case Bing shifts HTML attribute rendering
+        if (images.length === 0) {
+            const matches = res.data.match(/murl&quot;:&quot;(http[^&]+)&quot;/g) || [];
+            for (const match of matches) {
+                const rawUrl = match.replace('murl&quot;:&quot;', '').replace('&quot;', '');
+                if (rawUrl.startsWith('http') && !images.includes(rawUrl)) {
+                    images.push(rawUrl);
+                }
+            }
+        }
         
         return images;
     } catch (e) {
         console.warn("[Bing Image Scraper] Failed:", e.message);
+        return [];
+    }
+}
+
+// Helper: Yandex Images Direct HTTP Scraper (Truly 100% Unfiltered, fast, no browser needed)
+async function scrapeYandexDirectImages(query) {
+    try {
+        const url = `https://yandex.com/images/search?text=${encodeURIComponent(query)}&family=0`;
+        const res = await axios.get(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Cookie': 'yp=1750000000.sp.family%3A0#1750000000.ygu.1; yandexuid=1234567890'
+            },
+            timeout: 8000
+        });
+        const matches = res.data.match(/img_url=([^&"]+)/g) || [];
+        const directUrls = matches
+            .map(m => decodeURIComponent(m.replace('img_url=', '')))
+            .filter(u => u && u.startsWith('http') && !u.includes('yandex.net/'));
+        return Array.from(new Set(directUrls));
+    } catch (e) {
+        console.warn("[Yandex Direct Image Scraper] Failed:", e.message);
         return [];
     }
 }
@@ -250,30 +355,93 @@ app.post('/api/scrape/image', async (req, res) => {
     const { query } = req.body;
     if (!query) return res.status(400).json({ error: 'Query is required' });
 
-    let urls = [];
-    try {
-        const google = require('googlethis');
-        // Fetch images using googlethis (safe=false to avoid missing results for general queries)
-        const images = await google.image(query, { safe: false });
+    // Clean conversational filler words for maximum image search relevance
+    const cleanQuery = query
+        .replace(/\b(show|me|photos|photo|pics|pic|images|image|wallpaper|wallpapers|dikhao|dikhana|bhejo|bhejiye|chahiye|ki|ka|ke|mujhe)\b/gi, '')
+        .trim() || query;
 
-        if (images && images.length > 0) {
-            const blockedDomains = ['tiktok.com', 'tiktokv.com', 'byteoversea.com'];
-            urls = images
-                .map(img => {
-                    let url = img.url;
-                    if (url && blockedDomains.some(domain => url.toLowerCase().includes(domain))) {
-                        url = `https://images.weserv.nl/?url=${encodeURIComponent(url)}`;
-                    }
-                    return url;
-                })
-                .filter(url => url && url.startsWith('http'))
-                .slice(0, 5);
+    const isSensitive = /\b(unfiltered|sexy|hot|nude|xxx|bikini|nsfw|sensual|uncensored|naked|bhabhi|model)\b/i.test(query);
+
+    let urls = [];
+
+    // Attempt 1: Yandex Direct (Uncensored family=0 - World #1 for unrestricted raw/NSFW content)
+    if (isSensitive) {
+        try {
+            console.log(`[WebImageScraper] Searching Yandex Direct (Uncensored family=0) for: "${cleanQuery}"`);
+            const yandexUrls = await scrapeYandexDirectImages(cleanQuery);
+            if (yandexUrls && yandexUrls.length > 0) {
+                urls = yandexUrls.slice(0, 5);
+                console.log(`[WebImageScraper] Successfully retrieved ${urls.length} images via Yandex Direct.`);
+            }
+        } catch (yErr) {
+            console.warn('[WebImageScraper] Yandex Direct failed, attempting Bing...', yErr.message);
         }
-    } catch (e) {
-        console.warn('[WebImageScraper] Google-This search failed, attempting fallbacks...', e.message);
     }
 
-    // Fallback 1: Yandex Images (Playwright - Truly Unfiltered)
+    // Attempt 2: Bing Images (Unfiltered adlt=off with SafeSearch OFF cookie)
+    if (urls.length === 0) {
+        try {
+            console.log(`[WebImageScraper] Searching Bing Images (Unfiltered) for: "${cleanQuery}"`);
+            const bingUrls = await scrapeBingImages(cleanQuery);
+            if (bingUrls && bingUrls.length > 0) {
+                urls = bingUrls.slice(0, 5);
+                console.log(`[WebImageScraper] Successfully retrieved ${urls.length} images via Bing Images.`);
+            }
+        } catch (bingErr) {
+            console.warn('[WebImageScraper] Bing scraper failed, attempting fallbacks...', bingErr.message);
+        }
+    }
+
+    // Attempt 3: Yandex Direct fallback for general queries
+    if (urls.length === 0 && !isSensitive) {
+        try {
+            const yandexUrls = await scrapeYandexDirectImages(cleanQuery);
+            if (yandexUrls && yandexUrls.length > 0) {
+                urls = yandexUrls.slice(0, 5);
+                console.log(`[WebImageScraper] Successfully retrieved ${urls.length} images via Yandex Direct fallback.`);
+            }
+        } catch (yErr) {}
+    }
+
+    // Attempt 2: Google-This
+    if (urls.length === 0) {
+        try {
+            const google = require('googlethis');
+            // Fetch images using googlethis (safe=false to avoid missing results for general queries)
+            const images = await google.image(query, { safe: false });
+
+            if (images && images.length > 0) {
+                const blockedDomains = ['tiktok.com', 'tiktokv.com', 'byteoversea.com'];
+                urls = images
+                    .map(img => {
+                        let url = img.url;
+                        if (url && blockedDomains.some(domain => url.toLowerCase().includes(domain))) {
+                            url = `https://images.weserv.nl/?url=${encodeURIComponent(url)}`;
+                        }
+                        return url;
+                    })
+                    .filter(url => url && url.startsWith('http'))
+                    .slice(0, 5);
+            }
+        } catch (e) {
+            console.warn('[WebImageScraper] Google-This search failed, attempting fallbacks...', e.message);
+        }
+    }
+
+    // Attempt 3: DuckDuckGo API
+    if (urls.length === 0) {
+        try {
+            const fallbackUrls = await scrapeDuckDuckGoImages(query);
+            if (fallbackUrls.length > 0) {
+                urls = fallbackUrls.slice(0, 5);
+                console.log(`[WebImageScraper] Successfully retrieved ${urls.length} images via DuckDuckGo.`);
+            }
+        } catch (fallbackErr) {
+            console.warn('[WebImageScraper] DuckDuckGo fallback failed:', fallbackErr.message);
+        }
+    }
+
+    // Attempt 4: Yandex Images (Playwright - Truly Unfiltered)
     if (urls.length === 0) {
         try {
             console.log('[WebImageScraper] Attempting Yandex Playwright fallback...');
@@ -284,20 +452,6 @@ app.post('/api/scrape/image', async (req, res) => {
             }
         } catch (yandexErr) {
             console.error('[WebImageScraper] Yandex fallback failed:', yandexErr.message);
-        }
-    }
-
-    // Fallback 2: Bing Images (Unfiltered)
-    if (urls.length === 0) {
-        try {
-            console.log('[WebImageScraper] Attempting Bing fallback...');
-            const bingUrls = await scrapeBingImages(query);
-            if (bingUrls.length > 0) {
-                urls = bingUrls.slice(0, 5);
-                console.log(`[WebImageScraper] Successfully retrieved ${urls.length} images via Bing Images.`);
-            }
-        } catch (bingErr) {
-            console.error('[WebImageScraper] Bing fallback failed:', bingErr.message);
         }
     }
 
@@ -821,6 +975,12 @@ app.post('/api/scheduler/stop', (req, res) => {
     const { stopJobById } = require('./scheduler');
     const { id } = req.body;
     const success = stopJobById(id);
+    res.json({ success });
+});
+
+app.post('/api/scheduler/clear-all', (req, res) => {
+    const { clearAllJobs } = require('./scheduler');
+    const success = clearAllJobs();
     res.json({ success });
 });
 
@@ -1751,15 +1911,16 @@ app.post('/api/web/search', async (req, res) => {
     const stealth = require('puppeteer-extra-plugin-stealth')();
     chromium.use(stealth);
 
-    // --- Shared browser for ALL engines (saves ~500MB RAM vs 13 separate browsers) ---
-    let browser;
+    // --- Shared browser for ALL engines (with graceful HTTP fallback) ---
+    let browser = null;
+    let context = null;
     try {
         browser = await chromium.launch({
             headless: true,
             args: ['--no-sandbox', '--disable-dev-shm-usage']
         });
 
-        const context = await browser.newContext({
+        context = await browser.newContext({
             userAgent: getRandomUA(),
             viewport: { width: 1366, height: 768 },
             locale: 'en-US'
@@ -1769,9 +1930,14 @@ app.post('/api/web/search', async (req, res) => {
         await context.route('**/*.{png,jpg,jpeg,gif,svg,webp,woff,woff2,ttf,eot,mp4}', route => route.abort());
         await context.route('**/*google-analytics*', route => route.abort());
         await context.route('**/*googletagmanager*', route => route.abort());
+    } catch (browserErr) {
+        console.warn(`[MultiSearch:v2] Headless browser unavailable (${browserErr.message}). Continuing with HTTP/API search engines.`);
+    }
 
+    try {
         // --- Engine scraper using shared context ---
         async function scrapeEngine(name, url, selector, snippetSelector) {
+            if (!context) return [];
             let page;
             try {
                 page = await context.newPage();
@@ -1935,8 +2101,10 @@ app.post('/api/web/search', async (req, res) => {
         ];
 
         const resultsArray = await Promise.allSettled(scraperTasks);
-        await browser.close();
-        browser = null;
+        if (browser) {
+            await browser.close().catch(() => {});
+            browser = null;
+        }
 
         let allResults = [];
         resultsArray.forEach(r => {
@@ -2143,9 +2311,9 @@ server.listen(PORT, () => {
     // Initialize MCP after the server is listening (keeps event loop alive)
     mcpManager.init().catch(err => console.error('[MCP] Init failed:', err.message));
 
-    // Initialize Scheduler
+    // Initialize Scheduler with IO reference for client catch-up triggers
     try {
-        scheduler.initScheduler(null, orchestratorBridge);
+        scheduler.initScheduler(null, orchestratorBridge, io);
         console.log('[Scheduler] Initialized successfully.');
     } catch (e) {
         console.warn('[Scheduler] Init failed:', e.message);

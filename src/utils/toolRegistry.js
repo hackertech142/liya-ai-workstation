@@ -125,14 +125,15 @@ export const tools = [
             frequency: 'string ("once", "daily", or "cron")',
             prompt: 'string (REQUIRED for action tasks: the exact instruction to execute)'
         },
-        execute: async ({ title, time, frequency = 'daily', prompt = '' }, env) => {
-            // Helper to handle relative time offsets directly if passed like "10m"
+        execute: async ({ title, time, frequency, prompt = '' }, env) => {
+            let actualFrequency = frequency;
             let computedTime = time;
 
-            if (time.match(/^\d+[mhs]$/i) || time.toLowerCase().includes('minute') || time.toLowerCase().includes('hour') || time.toLowerCase().includes('second')) {
+            const isRelative = time.match(/^\d+[mhs]$/i) || time.toLowerCase().includes('minute') || time.toLowerCase().includes('hour') || time.toLowerCase().includes('second');
+            if (isRelative) {
                 const amountMatch = time.match(/\d+/);
                 if (amountMatch) {
-                    const amount = parseInt(amountMatch[0]);
+                    const amount = parseInt(amountMatch[0], 10);
                     const unit = (time.match(/[mhs]/i) || ['m'])[0].toLowerCase();
                     const isMin = unit === 'm' || time.toLowerCase().includes('min');
                     const isHour = unit === 'h' || time.toLowerCase().includes('hour');
@@ -145,13 +146,15 @@ export const tools = [
 
                     // Format for backend: HH:mm:ss if it's a "once" task to be more precise
                     computedTime = `${String(target.getHours()).padStart(2, '0')}:${String(target.getMinutes()).padStart(2, '0')}:${String(target.getSeconds()).padStart(2, '0')}`;
-                    frequency = 'once';
+                    actualFrequency = 'once';
                 }
+            } else if (!actualFrequency) {
+                actualFrequency = 'once';
             }
 
             if (env && env.onScheduleAutomation) {
-                env.onScheduleAutomation({ title, time: computedTime, frequency, prompt });
-                return `Successfully scheduled: "${title}" at ${computedTime} (${frequency}).${prompt ? ' Will auto-execute: ' + prompt : ''}`;
+                env.onScheduleAutomation({ title, time: computedTime, frequency: actualFrequency, prompt });
+                return `Successfully scheduled: "${title}" at ${computedTime} (${actualFrequency}).${prompt ? ' Will auto-execute: ' + prompt : ''}`;
             }
             return 'Scheduling failed: System interface not ready.';
         }
@@ -331,10 +334,10 @@ export const tools = [
     },
     {
         name: 'news',
-        description: 'SKILL: Real-Time Headlines & Trending Topics. Use this ONLY when the user asks for "latest news", "breaking updates", or "current headlines" about a general sector (tech, business, sports, india). If they have a SPECIFIC question about a news event (e.g. "Who won the election?"), use the "research" tool instead.',
+        description: 'Real-Time Headlines, Breaking Incidents & Recent Events. Use this whenever the user wants newly updated information about recently happened events, current incidents, breaking updates, or sector news (e.g., "aaj kya hua", "recently kya ghatna ghati", "latest news", "breaking updates", "aaj ki taza khabar", tech/business/sports updates). Powered by NewsAgent.',
         parameters: { 
             category: 'string (Required: general, technology, business, sports, science, health, india)',
-            query: 'string (Optional: filter news by keyword)'
+            query: 'string (Optional: filter news by keyword or specific recent event)'
         },
         execute: async ({ category, query }) => {
             const { newsAgent } = await import('./newsAgent');
@@ -436,7 +439,7 @@ export const tools = [
             try {
                 // Ensure axios is available or use fetch since we are in the frontend here
                 // We will call our new backend API instead.
-                const response = await fetch('http://localhost:3000/api/scrape/image', {
+                const response = await fetch(`${getBackendUrl()}/api/scrape/image`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ query })

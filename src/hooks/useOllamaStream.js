@@ -133,6 +133,8 @@ export const useOllamaStream = () => {
                 stream: true,
                 keep_alive: '60m',
                 options: {
+                    num_ctx: 16384,
+                    num_predict: 4096,
                     reasoning_effort: reasoningEffort,
                     temperature: 0.85,
                     top_k: 50,
@@ -217,7 +219,7 @@ export const useOllamaStream = () => {
                         onChunk(`Arey Master, lagta hai koi technical issue ki wajah se response empty aa raha hai. AI ne research toh kar li thi, par reply nahi de paayi. Aap ek baar fir se puch sakte hain?`);
                     } else if (contentChunksSent === 0 && !abortControllerRef.current?.signal.aborted) {
                         console.warn("⚠️ Model only generated reasoning without final response text before stopping.");
-                        onChunk(`\n\n*(Model reasoning budget exhaust ho gaya. Coder Model ke liye Settings me **gpt-oss:120b** use karein.)*`);
+                        onChunk(`\n\n*(Deep reasoning complete ho gayi Boss, lekin token limit reach ho gayi thi. Ab token buffer badha diya gaya hai, dobara try kijiye!)*`);
                     }
                     if (!thinkingStopped && onThinking) {
                         onThinking(false);

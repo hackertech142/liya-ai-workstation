@@ -187,7 +187,6 @@ function App() {
   const [isListening, setIsListening] = useState(false); // Voice Input State
   const [aiState, setAiState] = useState('idle'); // 'idle', 'thinking', 'speaking'
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // Mobile Sidebar State
-  const [isMobileStarOpen, setIsMobileStarOpen] = useState(false); // NEW: Mobile Star Features Collapse State
   const [isStarOpen, setStarOpen] = useState(() => {
     return localStorage.getItem('LIYA_STAR_SIDEBAR_OPEN') === 'true';
   });
@@ -251,6 +250,7 @@ function App() {
     socket.on('chat-message', (data) => {
       console.log("💬 Chat Message Received:", data);
       setMessages(prev => [...prev, data]);
+      setActiveModule('chat');
     });
     socket.on('system-stats', (data) => {
       setUiState(prev => ({
@@ -864,7 +864,9 @@ function App() {
     setAiState('thinking');
 
     // Extract prompt subject: clean query of filler words
-    const subject = userPrompt.replace(/\b(generate|image|photo|picture|of|draw|show|me|a|paint|create)\b/gi, '').trim() || userPrompt;
+    const subject = userPrompt
+      .replace(/\b(generate|image|images|photo|photos|picture|pictures|pics|pic|wallpaper|wallpapers|of|draw|show|me|a|paint|create|dikhao|dikhana|bhejo|bhejiye|mujhe|chahiye|ki|ka|ke|karo)\b/gi, '')
+      .trim() || userPrompt;
 
     let assistantIndex = -1;
     setMessages(prev => {
@@ -915,7 +917,7 @@ function App() {
       const data = await response.json();
 
       if (data.urls && data.urls.length > 0) {
-        const imageTags = data.urls.map((url, idx) => `[DIRECT_IMAGE:${url}|Google Search: ${subject} (${idx + 1})]`).join('\n');
+        const imageTags = data.urls.map((url, idx) => `[DIRECT_IMAGE:${url}|Image Search: ${subject} (${idx + 1})]`).join('\n');
         const updatedMsgs = updateAssistantMessage(`${imageTags}\n\nYe lijiye, direct search se mujhe "${subject}" ki photos mil gayi hain!`);
         triggerAutoSpeak(`direct search se mujhe ${subject} ki photos mil gayi hain.`);
         setAiState('idle');
@@ -1108,11 +1110,11 @@ function App() {
         // --- FALLBACK: If message is STILL empty after Done, add a failure note ---
         let needsFallback = false;
 
-        const isImageRequest = /\b(image|photo|draw|picture|generate|pics|pic|photos)\b/i.test(promptToUse.toLowerCase());
+        const isImageRequest = /\b(image|images|photo|photos|draw|picture|pictures|generate|pics|pic|wallpaper|wallpapers|tasveer|tasveerein|unfiltered|raw photo|xxx|hot|sexy|model|actress|actor)\b/i.test(promptToUse.toLowerCase());
         const hasImageTag = accumulatedResponse.includes('[DIRECT_IMAGE:') || accumulatedResponse.includes('![') || accumulatedResponse.includes('<img');
-        const hasRefusal = /\b(can't help|cannot find|unable to|sorry|maaf|nahi kar|mushkil|can\u2019t help)\b/i.test(accumulatedResponse) || accumulatedResponse.trim().length < 35;
+        const hasRefusal = /\b(can't help|cannot help|cannot fulfill|unable to|sorry|maaf|nahi kar|mushkil|safety guidelines|policy|explicit|violate|can\u2019t help)\b/i.test(accumulatedResponse) || accumulatedResponse.trim().length < 35;
 
-        if (isImageRequest && (!hasImageTag || hasRefusal)) {
+        if (isImageRequest && !hasImageTag) {
           needsFallback = true;
         }
 
@@ -1202,7 +1204,7 @@ function App() {
         onClose={() => setIsCanvasVisible(false)}
       />
 
-      {/* Sidebar - HIDDEN ON MOBILE */}
+      {/* Unified Modern Sidebar (Desktop + Mobile Drawer) */}
       <Sidebar
         activeModule={activeModule}
         setActiveModule={(mod) => {
@@ -1227,6 +1229,8 @@ function App() {
         onRenameSession={handleRenameSession}
         onNewChat={handleNewChat}
         isPicoMode={isPicoMode}
+        isMobileMenuOpen={isMobileMenuOpen}
+        onCloseMobileMenu={() => setIsMobileMenuOpen(false)}
       />
 
       {/* Main Interface */}
@@ -1315,196 +1319,6 @@ function App() {
         {/* Home Control Module */}
         {activeModule === 'home' && <HomeControl />}
       </div>
-
-      {/* MOBILE SLIDE-OUT SIDEBAR (DRAWER) */}
-      {
-        isMobileMenuOpen && (
-          <div className="fixed inset-0 z-[100] md:hidden">
-            {/* Backdrop */}
-            <div
-              className="absolute inset-0 bg-gray-200 backdrop-blur-sm"
-              onClick={() => setIsMobileMenuOpen(false)}
-            ></div>
-
-            {/* Global Sidebar */}
-            <aside className="absolute top-0 left-0 w-[280px] h-full bg-[#08080c] border-r border-gray-300 flex flex-col animate-in slide-in-from-left duration-300">
-              <div className="h-20 flex items-center justify-between px-6 border-b border-gray-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-accent-red rounded-lg flex items-center justify-center">
-                    <Cpu size={18} className="text-gray-900" />
-                  </div>
-                  <h1 className="text-lg font-bold font-mono text-gray-900">LIYA</h1>
-                </div>
-                <button onClick={() => setIsMobileMenuOpen(false)} className="text-gray-500 hover:text-gray-900">
-                  <X size={20} />
-                </button>
-              </div>
-
-              <nav className="flex-1 py-6 px-4 space-y-2 overflow-y-auto">
-                {/* 1. New Chat (Mobile) */}
-                <button
-                  onClick={() => {
-                    handleNewChat();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-4 p-4 rounded-xl bg-accent-red/10 border border-accent-red/30 text-gray-900 font-bold"
-                >
-                  <Plus size={20} className="text-accent-red" />
-                  <span className="text-sm uppercase tracking-widest">New Protocol</span>
-                </button>
-
-                <div className="pt-2">
-                  <p className="px-4 text-[10px] font-bold text-gray-600 uppercase tracking-widest">Recent Sessions</p>
-                </div>
-
-                {/* Mobile Session List */}
-                <div className="space-y-1 max-h-[200px] overflow-y-auto px-1">
-                  {sessions.map(session => (
-                    <div key={session.id} className="flex items-center gap-1">
-                      <button
-                        onClick={() => {
-                          setCurrentSessionId(session.id);
-                          setActiveModule('chat');
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`
-                          flex-1 flex flex-col p-3 rounded-xl transition-all
-                          ${currentSessionId === session.id && activeModule === 'chat'
-                            ? 'bg-gray-100  border border-gray-300 '
-                            : 'bg-white  border border-transparent'
-                          }
-                        `}
-                      >
-                        <span className={`text-sm truncate ${currentSessionId === session.id ? 'text-gray-900  font-bold' : 'text-gray-500'}`}>
-                          {session.title}
-                        </span>
-                        <span className="text-[9px] text-gray-700 font-mono">
-                          {new Date(session.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => handleDeleteSession(session.id)}
-                        className="p-3 text-gray-700 hover:text-red-400"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="pt-2 border-t border-gray-200 opacity-50" />
-
-                {/* 2. Star Features Header */}
-                <button
-                  onClick={() => setIsMobileStarOpen(!isMobileStarOpen)}
-                  className="w-full flex items-center justify-between p-4 rounded-xl transition-all text-yellow-500/80 hover:bg-gray-100 mt-2"
-                >
-                  <div className="flex items-center gap-4">
-                    <Star size={20} className={['home', 'news', 'weather', 'currency'].includes(activeModule) ? 'text-accent-red' : 'text-yellow-500'} />
-                    <span className="text-sm font-bold tracking-wide">Star Features</span>
-                  </div>
-                  <div className="text-gray-600">
-                    {isMobileStarOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                  </div>
-                </button>
-
-                {/* 3. Star Features Contents */}
-                {isMobileStarOpen && (
-                  <div className="pl-6 space-y-2 mt-2 animate-in slide-in-from-top-2 fade-in duration-200">
-                    {[
-                      { icon: Home, label: 'Home Automation', id: 'home' },
-                      { icon: Newspaper, label: 'News Console', id: 'news' },
-                      { icon: CloudSun, label: 'Weather Station', id: 'weather' },
-                      { icon: CircleDollarSign, label: 'Money Exchange', id: 'currency' },
-                      { icon: Sparkles, label: 'Face Swap', id: 'faceswap' },
-                    ].map((item, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => {
-                          setActiveModule(item.id);
-                          stopSpeech();
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`
-                          w-full flex items-center gap-4 p-3 rounded-xl transition-all
-                          ${activeModule === item.id
-                            ? 'bg-accent-red/10 text-gray-900  border border-accent-red/30'
-                            : 'text-gray-500 hover:bg-gray-100  hover:text-gray-300'
-                          }
-                        `}
-                      >
-                        <item.icon size={18} className={activeModule === item.id ? 'text-accent-red' : ''} />
-                        <span className="text-sm font-medium">{item.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* 4. Canvas Toggle (Mobile) */}
-                <button
-                  onClick={() => {
-                    setIsCanvasVisible(!isCanvasVisible);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`
-                    w-full flex items-center gap-4 p-4 rounded-xl transition-all mt-2
-                    ${isCanvasVisible
-                      ? 'bg-accent-blue/10 text-gray-900  border border-accent-blue/30'
-                      : 'text-gray-500 hover:bg-gray-100  hover:text-gray-300'
-                    }
-                `}
-                >
-                  <Layout size={20} className={isCanvasVisible ? 'text-accent-blue' : ''} />
-                  <span className="text-sm font-medium flex-1 text-left">Agentic Canvas</span>
-                </button>
-
-                {/* 5. System Control (Standalone) */}
-                <button
-                  onClick={() => {
-                    setActiveModule('system');
-                    stopSpeech();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`
-                    w-full flex items-center gap-4 p-4 rounded-xl transition-all mt-2
-                    ${activeModule === 'system'
-                      ? 'bg-accent-red/10 text-gray-900  border border-accent-red/30'
-                      : 'text-gray-500 hover:bg-gray-100  hover:text-gray-300'
-                    }
-                `}
-                >
-                  <Shield size={20} className={activeModule === 'system' ? 'text-accent-red' : ''} />
-                  <span className="text-sm font-medium flex-1 text-left">System Control</span>
-                  {(backgroundTasks.filter(t => t.status === 'running').length > 0 || hasNotification) && (
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-gray-900  ${hasNotification ? 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'bg-accent-red animate-pulse'}`}>
-                      {hasNotification ? 'NEW' : backgroundTasks.filter(t => t.status === 'running').length}
-                    </span>
-                  )}
-                </button>
-
-                {/* 6. Settings (Standalone) */}
-                <button
-                  onClick={() => {
-                    setActiveModule('settings');
-                    stopSpeech();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`
-                    w-full flex items-center gap-4 p-4 rounded-xl transition-all mt-2
-                    ${activeModule === 'settings'
-                      ? 'bg-accent-red/10 text-gray-900  border border-accent-red/30'
-                      : 'text-gray-500 hover:bg-gray-100  hover:text-gray-300'
-                    }
-                `}
-                >
-                  <Settings size={20} className={activeModule === 'settings' ? 'text-accent-red' : ''} />
-                  <span className="text-sm font-medium">Settings</span>
-                </button>
-              </nav>
-            </aside>
-          </div>
-        )
-      }
 
       {/* OVERLAYS & MODALS */}
     </div >

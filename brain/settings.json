@@ -4,5 +4,13 @@
   "CODER_MODEL": "beam",
   "OLLAMA_VISION_MODEL": "gemma4:31b",
   "userName": "Navraj",
-  "updatedAt": 1792248228883
+  "updatedAt": 1792422029148,
+  "apiKeys": {
+    "VITE_OLLAMA_CLOUD_API_KEY": "4824b24f13664237869d08b58a8b3cdc.lgd6wNBuUdRfyHnuyj6XfXuv",
+    "VITE_MEM0_API_KEY": "m0-QuNM2dnjjoUMbY6bPxfLgn8u7WrBejZOAajhn76X",
+    "VITE_NEWS_API_KEY": "306eeea622e14957bdd06011166d1e6c",
+    "VITE_WEATHER_API_KEY": "3afce4c4988da7a052ecacf6a06dfb54",
+    "VITE_CURRENCY_API_KEY": "df184cda6304ec189c42aabdfd03ddc0",
+    "VITE_PEXELS_API_KEY": "ZPWMZXFMv25PMQVFBDrDWSF5hdHKFB6wOnxVHOnAvo8mbdOJaxtZzA3m"
+  }
 }
