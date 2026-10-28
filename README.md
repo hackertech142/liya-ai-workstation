@@ -11,10 +11,15 @@
   [![Mem0 Memory](https://img.shields.io/badge/Mem0-Vector_Memory-FF4B4B?style=flat-square)](https://mem0.ai)
   [![Ollama Cloud](https://img.shields.io/badge/Ollama-Cloud_Routing-000000?style=flat-square)](https://ollama.com)
   [![License: MIT](https://img.shields.io/badge/License-MIT-emerald?style=flat-square)](LICENSE)
+  [![Features Demo](https://img.shields.io/badge/YouTube-Watch%20Features%20Walkthrough-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://youtu.be/7Is_5y1SJPw)
 
   <br />
 
   <img src="public/assets/liya_hero_banner.png" alt="LIYA AI Hero Banner" width="100%" />
+
+  <p align="center">
+    🎬 <b><a href="https://youtu.be/7Is_5y1SJPw">Watch the Complete System & Features Walkthrough on YouTube →</a></b>
+  </p>
 
 </div>
 
