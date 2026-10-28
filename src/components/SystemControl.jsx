@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
     Terminal, Cpu, Clock, Database, Trash2, X, AlertTriangle, 
-    Zap, Activity, BarChart3, ListTodo, ShieldAlert, 
+    Zap, BarChart3, ListTodo, ShieldAlert, 
     RefreshCcw, Play, Power, Layers, HardDrive, Settings,
     Search, Boxes, FlaskConical, Layout, Globe, RotateCcw, ArrowLeft,
     ShieldCheck, Network, Cpu as CpuIcon, ChevronDown, ChevronUp, Maximize2
@@ -466,7 +466,6 @@ const SystemControl = ({
                             <h3 className="text-[11px] font-black text-gray-900 font-mono uppercase tracking-[0.3em]">Quick Protocols</h3>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                            <QuickActionButton icon={Activity} label="Diagnostic" action="system check" onManualAction={onManualAction} />
                             <QuickActionButton icon={Trash2} label="Purge Logs" action="clear logs" onManualAction={onManualAction} />
                             <QuickActionButton icon={RefreshCcw} label="Refresh UI" action="refresh ui" onManualAction={onManualAction} />
                         </div>

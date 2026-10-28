@@ -9,7 +9,6 @@ import { motion as Motion } from 'framer-motion';
 import ChatInput from './components/ChatInput';
 import CameraCapture from './components/CameraCapture'; // NEW: Camera Component
 import Message from './components/Message';
-import HomeControl from './components/HomeControl';
 import NewsControl from './components/NewsControl';       // NEW
 import WeatherControl from './components/WeatherControl'; // NEW
 import CurrencyControl from './components/CurrencyControl'; // NEW
@@ -643,41 +642,7 @@ function App() {
         setMessages(prev => [...prev, { role: 'system', content: success ? '✅ Project blackboard cleared successfully.' : '❌ Failed to clear blackboard.' }]);
         return;
       }
-      if (command === 'system check') {
-        const visionModel = config.getApiKey('VITE_VISION_MODEL') || 'qwen3-vl:235b-cloud';
-        const cloudKey = config.getApiKey('VITE_OLLAMA_CLOUD_API_KEY');
-        const mem0Key = config.getApiKey('VITE_MEM0_API_KEY');
-        const customPersona = localStorage.getItem('CUSTOM_PERSONA') ? '✅ Active' : '⚪ Not Set';
-        const autoSpeak = localStorage.getItem('AUTO_SPEAK') === 'true' ? '✅ On' : '⚪ Off';
-        const checkTime = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-        const report = [
-          `✅ **LIVE SYSTEM HEALTH REPORT**`,
-          `*Checked at ${checkTime}*`,
-          ``,
-          `**🧠 AI Engine**`,
-          `- Active Model: \`Intelligent Routing (Active)\``,
-          `- Vision Model: \`${visionModel}\``,
-          `- Cloud API Key: ${cloudKey ? '✅ Configured' : '❌ Missing - Check Settings'}`,
-          `- Routing Mode: \`Dynamic\``,
-          ``,
-          `**💾 Memory System**`,
-          `- Mem0 Cloud: ${mem0Key ? '✅ Connected (Cloud)' : '⚠️ Local Fallback (No VITE_MEM0_API_KEY)'}`,
-          ``,
-          `**🏠 Smart Home (Sinric Pro)**`,
-          `- Status: ✅ Connected`,
-          `- Devices: Panel Light, Star Light, TV`,
-          ``,
-          `**🎛️ Settings**`,
-          `- Custom Persona: ${customPersona}`,
-          `- Auto-Speak: ${autoSpeak}`,
-          ``,
-          `All systems operational.`
-        ].join('\n');
-
-        setMessages(prev => [...prev, { role: 'assistant', content: report }]);
-        return;
-      }
       if (command === 'deep cleanup' || command === 'wipe data') {
         if (window.confirm("CRITICAL: Deep Nuclear Cleanup will wipe ALL sessions and local data. Are you absolutely sure?")) {
           clearAllSessions().then(() => {
@@ -1316,8 +1281,6 @@ function App() {
           />
         )}
 
-        {/* Home Control Module */}
-        {activeModule === 'home' && <HomeControl />}
       </div>
 
       {/* OVERLAYS & MODALS */}

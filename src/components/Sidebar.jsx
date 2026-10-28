@@ -138,20 +138,14 @@ const Sidebar = ({
                 <div className={`shrink-0 bg-transparent transition-all ${isPicoMode && !isMobile ? 'p-2' : 'p-3'}`}>
                     <div className="flex justify-between items-center mb-3 px-2 pt-2">
                         {(!isPicoMode || isMobile) && (
-                            <button 
-                                onClick={() => {
-                                    setActiveModule('home');
-                                    if (isMobile && onCloseMobileMenu) onCloseMobileMenu();
-                                }}
-                                className="flex items-center gap-2.5 rounded-xl hover:bg-gray-200/60 transition-all p-1 text-gray-800 font-semibold text-sm group"
-                            >
+                            <div className="flex items-center gap-2.5 rounded-xl p-1 text-gray-800 font-semibold text-sm">
                                 <img 
                                     src="/liya_logo.png" 
                                     alt="LIYA Logo" 
-                                    className="w-8 h-8 rounded-xl object-cover shadow-sm ring-1 ring-slate-900/10 group-hover:scale-105 transition-transform" 
+                                    className="w-8 h-8 rounded-xl object-cover shadow-sm ring-1 ring-slate-900/10" 
                                 />
                                 <span className="font-extrabold tracking-wider text-slate-900 font-mono text-sm">LIYA AI</span>
-                            </button>
+                            </div>
                         )}
                         <div className="flex items-center gap-1">
                             <button
